@@ -59,7 +59,7 @@ class _ImageEditorState extends State<ImageEditor> {
         // Layer 1: Image Viewer
         Positioned.fill(
           child: Container(
-            color: Colors.black12,
+            color: Colors.transparent,
             child: BeforeAfter(
               original: Image.file(
                 _previewFile ?? File(widget.file.path),
@@ -82,6 +82,7 @@ class _ImageEditorState extends State<ImageEditor> {
           right: 20,
           bottom: 20,
           child: Card(
+            color: Colors.black.withValues(alpha: 0.9),
             elevation: 8,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
             child: Container(
@@ -204,8 +205,8 @@ class _ImageEditorState extends State<ImageEditor> {
 
   Future<void> _generatePreview() async {
     final ext = p.extension(widget.file.path).toLowerCase();
-    if (ext == '.avif') {
-      // Convert AVIF to PNG for preview
+    if (ext == '.avif' || ext == '.heic') {
+      // Convert AVIF/HEIC to PNG for preview
       try {
         final tempDir = await getTemporaryDirectory();
         final previewPath = '${tempDir.path}/preview.png';

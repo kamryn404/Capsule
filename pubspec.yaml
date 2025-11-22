@@ -41,6 +41,9 @@ dependencies:
   path: ^1.9.1
   video_player: ^2.10.1
   window_manager: ^0.5.1
+  camera: ^0.11.3
+  record: ^6.1.2
+  camera_macos: ^0.0.9
   # ffmpeg_kit_flutter_min_gpl: ^6.0.3
 
 # dependency_overrides:

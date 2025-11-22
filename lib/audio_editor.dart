@@ -117,7 +117,7 @@ class _AudioEditorState extends State<AudioEditor> {
         // Layer 1: Audio Viewer (Split View)
         Positioned.fill(
           child: Container(
-            color: Colors.black12,
+            color: Colors.transparent,
             child: Row(
               children: [
                 // Original
@@ -374,6 +374,11 @@ class _AudioEditorState extends State<AudioEditor> {
     final sizeBytes = (totalBitrate * 1000 * durationSeconds) / 8 * 1.05;
 
     if (sizeBytes <= 0) return "~0 MB";
+
+    if (sizeBytes < 1024 * 1024) {
+      final sizeKB = sizeBytes / 1024;
+      return '~${sizeKB.toStringAsFixed(0)} KB';
+    }
 
     final sizeMB = sizeBytes / (1024 * 1024);
     return '~${sizeMB.toStringAsFixed(1)} MB';

@@ -131,7 +131,7 @@ class _VideoEditorState extends State<VideoEditor> {
         // Layer 1: Video Viewer
         Positioned.fill(
           child: Container(
-            color: Colors.black12,
+            color: Colors.transparent,
             child: _originalController != null && _originalController!.value.isInitialized
                 ? BeforeAfter(
                     original: Center(
@@ -400,6 +400,11 @@ class _VideoEditorState extends State<VideoEditor> {
     final sizeBytes = (totalBitrate * 1000 * durationSeconds) / 8;
     
     if (sizeBytes <= 0) return "~0 MB";
+    
+    if (sizeBytes < 1024 * 1024) {
+      final sizeKB = sizeBytes / 1024;
+      return '~${sizeKB.toStringAsFixed(0)} KB';
+    }
     
     final sizeMB = sizeBytes / (1024 * 1024);
     return '~${sizeMB.toStringAsFixed(1)} MB';
