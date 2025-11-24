@@ -8,17 +8,28 @@ import 'package:path_provider/path_provider.dart';
 import 'package:video_player/video_player.dart';
 
 import 'ffmpeg_service.dart';
+import 'models/compression_settings.dart';
 import 'widgets/before_after.dart';
 import 'widgets/media_controls.dart';
 
 class VideoEditor extends StatefulWidget {
   final XFile file;
   final VoidCallback onClear;
+  final VideoSettings? settings;
+  final ValueChanged<VideoSettings>? onSettingsChanged;
+  final VoidCallback? onSaveBatch;
+  final String? progressLabel;
+  final double? batchProgress;
 
   const VideoEditor({
     super.key,
     required this.file,
     required this.onClear,
+    this.settings,
+    this.onSettingsChanged,
+    this.onSaveBatch,
+    this.progressLabel,
+    this.batchProgress,
   });
 
   @override
@@ -53,6 +64,27 @@ class _VideoEditorState extends State<VideoEditor> {
     _ffmpegService = FfmpegServiceFactory.create();
     _ffmpegService.init();
     _initializeVideo();
+    if (widget.settings != null) {
+      _outputFormat = widget.settings!.outputFormat;
+      _bitrate = widget.settings!.bitrate;
+      _resolution = widget.settings!.resolution;
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant VideoEditor oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.file.path != widget.file.path) {
+      _initializeVideo();
+    }
+    if (widget.settings != null && widget.settings != oldWidget.settings) {
+      setState(() {
+        _outputFormat = widget.settings!.outputFormat;
+        _bitrate = widget.settings!.bitrate;
+        _resolution = widget.settings!.resolution;
+      });
+      _debouncePreview();
+    }
   }
 
   @override
@@ -169,9 +201,10 @@ class _VideoEditorState extends State<VideoEditor> {
             outputFormat: _outputFormat,
             bitrate: _bitrate,
             maxBitrate: _maxBitrate,
-            isCompressing: _isCompressing,
+            isCompressing: _isCompressing || widget.batchProgress != null,
             isPreviewing: _isPreviewing,
-            progress: _progress,
+            progress: widget.batchProgress ?? _progress,
+            progressLabel: widget.progressLabel,
             originalSize: _originalSize,
             estimatedSize: _estimateSize(),
             hasAv1Hardware: _hasAv1Hardware,
@@ -187,6 +220,13 @@ class _VideoEditorState extends State<VideoEditor> {
                 setState(() {
                   _outputFormat = newValue;
                 });
+                if (widget.onSettingsChanged != null) {
+                  widget.onSettingsChanged!(VideoSettings(
+                    outputFormat: _outputFormat,
+                    bitrate: _bitrate,
+                    resolution: _resolution,
+                  ));
+                }
                 _generatePreview();
               }
             },
@@ -195,16 +235,30 @@ class _VideoEditorState extends State<VideoEditor> {
                 setState(() {
                   _resolution = newValue;
                 });
+                if (widget.onSettingsChanged != null) {
+                  widget.onSettingsChanged!(VideoSettings(
+                    outputFormat: _outputFormat,
+                    bitrate: _bitrate,
+                    resolution: _resolution,
+                  ));
+                }
                 _generatePreview();
               }
             },
             onBitrateChanged: _onBitrateChanged,
             onBitrateEnd: (value) {
               _debounceTimer?.cancel();
+              if (widget.onSettingsChanged != null) {
+                widget.onSettingsChanged!(VideoSettings(
+                  outputFormat: _outputFormat,
+                  bitrate: _bitrate,
+                  resolution: _resolution,
+                ));
+              }
               _generatePreview();
             },
             onClear: widget.onClear,
-            onSave: _saveVideo,
+            onSave: widget.onSaveBatch ?? _saveVideo,
             formatItems: [
               DropdownMenuItem(
                 value: 'av1',

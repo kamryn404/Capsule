@@ -5,19 +5,29 @@ import 'package:flutter/material.dart';
 import 'package:gal/gal.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
-import 'package:permission_handler/permission_handler.dart';
 
+import 'models/compression_settings.dart';
 import 'ffmpeg_service.dart';
 import 'widgets/before_after.dart';
 
 class ImageEditor extends StatefulWidget {
   final XFile file;
   final VoidCallback onClear;
+  final ImageSettings? settings;
+  final ValueChanged<ImageSettings>? onSettingsChanged;
+  final VoidCallback? onSaveBatch;
+  final String? progressLabel;
+  final double? batchProgress;
 
   const ImageEditor({
     super.key,
     required this.file,
     required this.onClear,
+    this.settings,
+    this.onSettingsChanged,
+    this.onSaveBatch,
+    this.progressLabel,
+    this.batchProgress,
   });
 
   @override
@@ -43,6 +53,11 @@ class _ImageEditorState extends State<ImageEditor> {
     _ffmpegService.init();
     _updateOriginalSize();
     _generatePreview();
+    if (widget.settings != null) {
+      _outputFormat = widget.settings!.outputFormat;
+      _quality = widget.settings!.quality;
+      _resolution = widget.settings!.resolution;
+    }
     _compressImage();
   }
 
@@ -52,6 +67,14 @@ class _ImageEditorState extends State<ImageEditor> {
     if (oldWidget.file.path != widget.file.path) {
       _updateOriginalSize();
       _generatePreview();
+      _compressImage();
+    }
+    if (widget.settings != null && widget.settings != oldWidget.settings) {
+      setState(() {
+        _outputFormat = widget.settings!.outputFormat;
+        _quality = widget.settings!.quality;
+        _resolution = widget.settings!.resolution;
+      });
       _compressImage();
     }
   }
@@ -114,7 +137,7 @@ class _ImageEditorState extends State<ImageEditor> {
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
                           const Text('Compressed', style: TextStyle(fontSize: 12, color: Colors.grey)),
-                          if (_isCompressing)
+                          if (_isCompressing && widget.batchProgress == null)
                             const SizedBox(
                               width: 16,
                               height: 16,
@@ -150,6 +173,13 @@ class _ImageEditorState extends State<ImageEditor> {
                               setState(() {
                                 _outputFormat = newValue;
                               });
+                              if (widget.onSettingsChanged != null) {
+                                widget.onSettingsChanged!(ImageSettings(
+                                  outputFormat: _outputFormat,
+                                  quality: _quality,
+                                  resolution: _resolution,
+                                ));
+                              }
                               _compressImage();
                             }
                           },
@@ -200,6 +230,13 @@ class _ImageEditorState extends State<ImageEditor> {
                                 setState(() {
                                   _resolution = newValue;
                                 });
+                                if (widget.onSettingsChanged != null) {
+                                  widget.onSettingsChanged!(ImageSettings(
+                                    outputFormat: _outputFormat,
+                                    quality: _quality,
+                                    resolution: _resolution,
+                                  ));
+                                }
                                 _compressImage();
                               }
                             },
@@ -229,6 +266,13 @@ class _ImageEditorState extends State<ImageEditor> {
                               });
                             },
                             onChangeEnd: (double value) {
+                              if (widget.onSettingsChanged != null) {
+                                widget.onSettingsChanged!(ImageSettings(
+                                  outputFormat: _outputFormat,
+                                  quality: _quality,
+                                  resolution: _resolution,
+                                ));
+                              }
                               _compressImage();
                             },
                           ),
@@ -251,13 +295,26 @@ class _ImageEditorState extends State<ImageEditor> {
                       const SizedBox(width: 16),
                       Expanded(
                         child: FilledButton.icon(
-                          onPressed: _compressedFile != null ? _saveImage : null,
-                          icon: const Icon(Icons.save),
-                          label: const Text('Save'),
+                          onPressed: _compressedFile != null && widget.batchProgress == null ? (widget.onSaveBatch ?? _saveImage) : null,
+                          icon: widget.batchProgress != null
+                              ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                              : const Icon(Icons.save),
+                          label: Text(widget.batchProgress != null ? 'Saving...' : 'Save'),
                         ),
                       ),
                     ],
                   ),
+                  if (widget.batchProgress != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8.0),
+                      child: Column(
+                        children: [
+                          LinearProgressIndicator(value: widget.batchProgress),
+                          const SizedBox(height: 4),
+                          Text(widget.progressLabel ?? '${(widget.batchProgress! * 100).round()}%'),
+                        ],
+                      ),
+                    ),
                 ],
               ),
             ),

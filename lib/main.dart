@@ -1,7 +1,6 @@
 import 'dart:io';
 import 'dart:ui';
 
-import 'package:cross_file/cross_file.dart';
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
@@ -11,6 +10,7 @@ import 'package:path/path.dart' as p;
 import 'package:window_manager/window_manager.dart';
 
 import 'views/audio_record_view.dart';
+import 'views/batch_view.dart';
 import 'views/camera_view.dart';
 import 'views/compress_view.dart';
 
@@ -57,7 +57,7 @@ class MyApp extends StatelessWidget {
   }
 }
 
-enum AppMode { home, camera, audio, compress }
+enum AppMode { home, camera, audio, compress, batch }
 
 class MyHomePage extends StatefulWidget {
   const MyHomePage({super.key});
@@ -69,6 +69,8 @@ class MyHomePage extends StatefulWidget {
 class _MyHomePageState extends State<MyHomePage> {
   AppMode _appMode = AppMode.home;
   XFile? _capturedFile;
+  List<XFile>? _batchFiles;
+  MediaType? _batchMediaType;
   bool _dragging = false;
 
   Future<void> _pickFile() async {
@@ -196,15 +198,56 @@ class _MyHomePageState extends State<MyHomePage> {
           setState(() {
             _dragging = false;
             if (detail.files.isNotEmpty) {
-              final file = detail.files.first;
-              final ext = p.extension(file.path).toLowerCase();
-              if (['.jpg', '.jpeg', '.png', '.webp', '.avif', '.heic', '.mp4', '.webm', '.mkv', '.mov', '.avi', '.mp3', '.aac', '.ogg', '.wav', '.flac', '.m4a', '.opus', '.aiff'].contains(ext)) {
-                _capturedFile = file;
-                _appMode = AppMode.compress;
+              if (detail.files.length == 1) {
+                final file = detail.files.first;
+                final ext = p.extension(file.path).toLowerCase();
+                if (['.jpg', '.jpeg', '.png', '.webp', '.avif', '.heic', '.mp4', '.webm', '.mkv', '.mov', '.avi', '.mp3', '.aac', '.ogg', '.wav', '.flac', '.m4a', '.opus', '.aiff'].contains(ext)) {
+                  _capturedFile = file;
+                  _appMode = AppMode.compress;
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Unsupported file format')),
+                  );
+                }
               } else {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Unsupported file format')),
-                );
+                // Batch mode
+                final files = detail.files;
+                MediaType? type;
+                bool isValid = true;
+
+                for (final file in files) {
+                  final ext = p.extension(file.path).toLowerCase();
+                  MediaType? fileType;
+                  if (['.jpg', '.jpeg', '.png', '.webp', '.avif', '.heic'].contains(ext)) {
+                    fileType = MediaType.image;
+                  } else if (['.mp4', '.webm', '.mkv', '.mov', '.avi'].contains(ext)) {
+                    fileType = MediaType.video;
+                  } else if (['.mp3', '.aac', '.ogg', '.wav', '.flac', '.m4a', '.opus', '.aiff'].contains(ext)) {
+                    fileType = MediaType.audio;
+                  }
+
+                  if (fileType == null) {
+                    isValid = false;
+                    break;
+                  }
+
+                  if (type == null) {
+                    type = fileType;
+                  } else if (type != fileType) {
+                    isValid = false;
+                    break;
+                  }
+                }
+
+                if (isValid && type != null) {
+                  _batchFiles = files;
+                  _batchMediaType = type;
+                  _appMode = AppMode.batch;
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Batch must contain only supported files of the same type (Image, Video, or Audio)')),
+                  );
+                }
               }
             }
           });
@@ -269,8 +312,19 @@ class _MyHomePageState extends State<MyHomePage> {
             });
           },
         );
+      case AppMode.batch:
+        return BatchView(
+          files: _batchFiles!,
+          mediaType: _batchMediaType!,
+          onClose: () {
+            setState(() {
+              _batchFiles = null;
+              _batchMediaType = null;
+              _appMode = AppMode.home;
+            });
+          },
+        );
       case AppMode.home:
-      default:
         return _buildHome();
     }
   }

@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:cross_file/cross_file.dart';
 import 'package:flutter/material.dart';
@@ -135,7 +134,7 @@ class _AudioRecordViewState extends State<AudioRecordView> {
                     height: 100,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: _isRecording ? Colors.red.withOpacity(0.2) : Colors.white.withOpacity(0.1),
+                      color: _isRecording ? Colors.red.withValues(alpha: 0.2) : Colors.white.withValues(alpha: 0.1),
                       border: Border.all(
                         color: _isRecording ? Colors.red : Colors.white,
                         width: 4,

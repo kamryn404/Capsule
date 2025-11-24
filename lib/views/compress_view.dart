@@ -1,5 +1,4 @@
 import 'package:cross_file/cross_file.dart';
-import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 

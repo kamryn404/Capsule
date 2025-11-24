@@ -6,17 +6,28 @@ import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:video_player/video_player.dart';
 
+import 'models/compression_settings.dart';
 import 'ffmpeg_service.dart';
 import 'widgets/media_controls.dart';
 
 class AudioEditor extends StatefulWidget {
   final XFile file;
   final VoidCallback onClear;
+  final AudioSettings? settings;
+  final ValueChanged<AudioSettings>? onSettingsChanged;
+  final VoidCallback? onSaveBatch;
+  final String? progressLabel;
+  final double? batchProgress;
 
   const AudioEditor({
     super.key,
     required this.file,
     required this.onClear,
+    this.settings,
+    this.onSettingsChanged,
+    this.onSaveBatch,
+    this.progressLabel,
+    this.batchProgress,
   });
 
   @override
@@ -49,6 +60,25 @@ class _AudioEditorState extends State<AudioEditor> {
     _ffmpegService = FfmpegServiceFactory.create();
     _ffmpegService.init();
     _initializeAudio();
+    if (widget.settings != null) {
+      _outputFormat = widget.settings!.outputFormat;
+      _bitrate = widget.settings!.bitrate;
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant AudioEditor oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.file.path != widget.file.path) {
+      _initializeAudio();
+    }
+    if (widget.settings != null && widget.settings != oldWidget.settings) {
+      setState(() {
+        _outputFormat = widget.settings!.outputFormat;
+        _bitrate = widget.settings!.bitrate;
+      });
+      _debouncePreview();
+    }
   }
 
   @override
@@ -159,9 +189,10 @@ class _AudioEditorState extends State<AudioEditor> {
             outputFormat: _outputFormat,
             bitrate: _bitrate,
             maxBitrate: _maxBitrate,
-            isCompressing: _isCompressing,
+            isCompressing: _isCompressing || widget.batchProgress != null,
             isPreviewing: _isPreviewing,
-            progress: _progress,
+            progress: widget.batchProgress ?? _progress,
+            progressLabel: widget.progressLabel,
             originalSize: _originalSize,
             estimatedSize: _estimateSize(),
             hasAv1Hardware: false, // Not relevant for audio
@@ -177,6 +208,12 @@ class _AudioEditorState extends State<AudioEditor> {
                 setState(() {
                   _outputFormat = newValue;
                 });
+                if (widget.onSettingsChanged != null) {
+                  widget.onSettingsChanged!(AudioSettings(
+                    outputFormat: _outputFormat,
+                    bitrate: _bitrate,
+                  ));
+                }
                 _generatePreview();
               }
             },
@@ -184,10 +221,16 @@ class _AudioEditorState extends State<AudioEditor> {
             onBitrateChanged: _onBitrateChanged,
             onBitrateEnd: (value) {
               _debounceTimer?.cancel();
+              if (widget.onSettingsChanged != null) {
+                widget.onSettingsChanged!(AudioSettings(
+                  outputFormat: _outputFormat,
+                  bitrate: _bitrate,
+                ));
+              }
               _generatePreview();
             },
             onClear: widget.onClear,
-            onSave: _saveAudio,
+            onSave: widget.onSaveBatch ?? _saveAudio,
             formatItems: const [
               DropdownMenuItem(value: 'mp3', child: Text('MP3')),
               DropdownMenuItem(value: 'ogg', child: Text('Vorbis (OGG)')),

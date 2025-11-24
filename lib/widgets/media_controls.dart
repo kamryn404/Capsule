@@ -9,6 +9,7 @@ class MediaControls extends StatelessWidget {
   final bool isCompressing;
   final bool isPreviewing;
   final double progress;
+  final String? progressLabel;
   final String? originalSize;
   final String estimatedSize;
   final bool hasAv1Hardware;
@@ -36,6 +37,7 @@ class MediaControls extends StatelessWidget {
     required this.isCompressing,
     required this.isPreviewing,
     required this.progress,
+    this.progressLabel,
     this.originalSize,
     required this.estimatedSize,
     required this.hasAv1Hardware,
@@ -225,7 +227,7 @@ class MediaControls extends StatelessWidget {
                   children: [
                     LinearProgressIndicator(value: progress),
                     const SizedBox(height: 4),
-                    Text('${(progress * 100).round()}%'),
+                    Text(progressLabel ?? '${(progress * 100).round()}%'),
                   ],
                 ),
               ),
