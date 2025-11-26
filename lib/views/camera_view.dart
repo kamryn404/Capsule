@@ -1,10 +1,13 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:camera/camera.dart';
 import 'package:cross_file/cross_file.dart';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
+
+// Platform-specific imports
+import 'package:camera/camera.dart' as camera_pkg;
+import 'package:camera_macos/camera_macos.dart' as camera_macos;
 
 enum CaptureMode { photo, video }
 
@@ -22,28 +25,46 @@ class CameraView extends StatefulWidget {
 
 class _CameraViewState extends State<CameraView> {
   CaptureMode _mode = CaptureMode.photo;
-  CameraController? _cameraController;
-  List<CameraDescription>? _cameras;
+  
+  // Standard camera controller (for non-macOS)
+  camera_pkg.CameraController? _cameraController;
+  List<camera_pkg.CameraDescription>? _cameras;
+  
+  // macOS-specific camera controller (received from CameraMacOSView callback)
+  camera_macos.CameraMacOSController? _macOSController;
   
   bool _isRecording = false;
   bool _isInitializing = true;
   String? _errorMessage;
 
+  bool get _isMacOS => Platform.isMacOS;
+  
+  // Key to force rebuild of CameraMacOSView when mode changes
+  Key? _macOSViewKey;
+
   @override
   void initState() {
     super.initState();
-    _initializeCamera();
+    _macOSViewKey = UniqueKey();
+    if (!_isMacOS) {
+      _initializeStandardCamera();
+    }
   }
 
-  Future<void> _initializeCamera() async {
+  camera_macos.CameraMacOSMode get _macOSCameraMode {
+    return _mode == CaptureMode.photo 
+        ? camera_macos.CameraMacOSMode.photo 
+        : camera_macos.CameraMacOSMode.video;
+  }
+
+  Future<void> _initializeStandardCamera() async {
     try {
-      _cameras = await availableCameras();
+      _cameras = await camera_pkg.availableCameras();
       if (_cameras != null && _cameras!.isNotEmpty) {
-        // Use the first camera (usually back camera on mobile, or webcam on desktop)
         final camera = _cameras!.first;
-        _cameraController = CameraController(
+        _cameraController = camera_pkg.CameraController(
           camera,
-          ResolutionPreset.max,
+          camera_pkg.ResolutionPreset.max,
           enableAudio: true,
         );
 
@@ -72,9 +93,20 @@ class _CameraViewState extends State<CameraView> {
     }
   }
 
+  void _onMacOSCameraInitialized(camera_macos.CameraMacOSController controller) {
+    debugPrint('macOS camera initialized');
+    _macOSController = controller;
+    if (mounted) {
+      setState(() {
+        _isInitializing = false;
+      });
+    }
+  }
+
   @override
   void dispose() {
     _cameraController?.dispose();
+    _macOSController?.destroy();
     super.dispose();
   }
 
@@ -151,6 +183,36 @@ class _CameraViewState extends State<CameraView> {
   }
 
   Widget _buildPreview() {
+    if (_isMacOS) {
+      return _buildMacOSPreview();
+    } else {
+      return _buildStandardPreview();
+    }
+  }
+
+  Widget _buildMacOSPreview() {
+    if (_errorMessage != null) {
+      return Center(child: Text(_errorMessage!, style: const TextStyle(color: Colors.white)));
+    }
+    
+    return camera_macos.CameraMacOSView(
+      key: _macOSViewKey,
+      cameraMode: _macOSCameraMode,
+      fit: BoxFit.contain,
+      pictureFormat: camera_macos.PictureFormat.jpg,
+      videoFormat: camera_macos.VideoFormat.mp4,
+      enableAudio: true,
+      onCameraInizialized: _onMacOSCameraInitialized,
+      onCameraLoading: (error) {
+        if (error != null) {
+          return Center(child: Text('Camera error: $error', style: const TextStyle(color: Colors.white)));
+        }
+        return const Center(child: CircularProgressIndicator());
+      },
+    );
+  }
+
+  Widget _buildStandardPreview() {
     if (_isInitializing) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -164,7 +226,7 @@ class _CameraViewState extends State<CameraView> {
     return Center(
       child: AspectRatio(
         aspectRatio: _cameraController!.value.aspectRatio,
-        child: CameraPreview(_cameraController!),
+        child: camera_pkg.CameraPreview(_cameraController!),
       ),
     );
   }
@@ -173,9 +235,15 @@ class _CameraViewState extends State<CameraView> {
     final isSelected = _mode == mode;
     return GestureDetector(
       onTap: () {
-        if (!_isRecording) {
+        if (!_isRecording && _mode != mode) {
           setState(() {
             _mode = mode;
+            // On macOS, we need to reinitialize the camera when switching modes
+            if (_isMacOS) {
+              _isInitializing = true;
+              _macOSController = null;
+              _macOSViewKey = UniqueKey();
+            }
           });
         }
       },
@@ -191,7 +259,14 @@ class _CameraViewState extends State<CameraView> {
   }
 
   Future<void> _onCaptureTap() async {
-    if (_cameraController == null || !_cameraController!.value.isInitialized) return;
+    if (_isMacOS) {
+      if (_macOSController == null) {
+        debugPrint('macOS camera controller not ready');
+        return;
+      }
+    } else {
+      if (_cameraController == null || !_cameraController!.value.isInitialized) return;
+    }
 
     debugPrint('Capture tapped. Mode: $_mode, Recording: $_isRecording');
     if (_mode == CaptureMode.photo) {
@@ -208,18 +283,55 @@ class _CameraViewState extends State<CameraView> {
   Future<void> _takePhoto() async {
     try {
       debugPrint('Taking photo...');
-      final file = await _cameraController!.takePicture();
-      debugPrint('Photo taken: ${file.path}');
-      widget.onCapture(file);
-    } catch (e) {
+      if (_isMacOS) {
+        debugPrint('macOS controller state: ${_macOSController != null}');
+        final result = await _macOSController!.takePicture();
+        debugPrint('takePicture result: $result');
+        if (result != null) {
+          debugPrint('Result url: ${result.url}, bytes: ${result.bytes?.length}');
+          if (result.url != null && result.url!.isNotEmpty) {
+            debugPrint('Photo taken on macOS: ${result.url}');
+            widget.onCapture(XFile(result.url!));
+          } else if (result.bytes != null && result.bytes!.isNotEmpty) {
+            // If no URL but has bytes, save to temp file
+            debugPrint('Photo has bytes, saving to temp file');
+            final tempDir = await getTemporaryDirectory();
+            final photoPath = '${tempDir.path}/camera_photo_${DateTime.now().millisecondsSinceEpoch}.jpg';
+            final file = File(photoPath);
+            await file.writeAsBytes(result.bytes!);
+            debugPrint('Photo saved to: $photoPath');
+            widget.onCapture(XFile(photoPath));
+          } else {
+            debugPrint('Photo capture returned result but no URL or bytes');
+          }
+        } else {
+          debugPrint('Photo capture returned null');
+        }
+      } else {
+        final file = await _cameraController!.takePicture();
+        debugPrint('Photo taken: ${file.path}');
+        widget.onCapture(file);
+      }
+    } catch (e, stackTrace) {
       debugPrint('Error taking photo: $e');
+      debugPrint('Stack trace: $stackTrace');
     }
   }
 
   Future<void> _startVideo() async {
     try {
       debugPrint('Starting video recording...');
-      await _cameraController!.startVideoRecording();
+      if (_isMacOS) {
+        // Get temp directory for video recording
+        final tempDir = await getTemporaryDirectory();
+        final videoPath = '${tempDir.path}/camera_video_${DateTime.now().millisecondsSinceEpoch}.mp4';
+        await _macOSController!.recordVideo(
+          url: videoPath,
+          enableAudio: true,
+        );
+      } else {
+        await _cameraController!.startVideoRecording();
+      }
       
       setState(() {
         _isRecording = true;
@@ -232,13 +344,25 @@ class _CameraViewState extends State<CameraView> {
   Future<void> _stopVideo() async {
     try {
       debugPrint('Stopping video recording...');
-      final file = await _cameraController!.stopVideoRecording();
-      setState(() {
-        _isRecording = false;
-      });
-      
-      debugPrint('Video stopped and file returned: ${file.path}');
-      widget.onCapture(file);
+      if (_isMacOS) {
+        final result = await _macOSController!.stopRecording();
+        setState(() {
+          _isRecording = false;
+        });
+        if (result != null && result.url != null) {
+          debugPrint('Video stopped on macOS: ${result.url}');
+          widget.onCapture(XFile(result.url!));
+        } else {
+          debugPrint('Video stop returned null or no URL');
+        }
+      } else {
+        final file = await _cameraController!.stopVideoRecording();
+        setState(() {
+          _isRecording = false;
+        });
+        debugPrint('Video stopped and file returned: ${file.path}');
+        widget.onCapture(file);
+      }
     } catch (e) {
       debugPrint('Error stopping video: $e');
     }

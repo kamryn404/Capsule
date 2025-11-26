@@ -398,16 +398,9 @@ class _MyHomePageState extends State<MyHomePage> {
     switch (_appMode) {
       case AppMode.camera:
         return CameraView(
-          onCapture: (file) {
-            setState(() {
-              _capturedFile = file;
-              _capturedMediaType = ffmpeg.MediaType.image; // Camera view currently only takes photos? Or video too?
-              // CameraView usually handles both but returns XFile.
-              // Let's assume image for now or check extension if needed, but CameraView is custom.
-              // Actually CameraView in this app seems to be photo only based on previous context?
-              // Let's check CameraView later if needed. For now assume image.
-              _appMode = AppMode.compress;
-            });
+          onCapture: (file) async {
+            // Probe the file to determine its type instead of hardcoding
+            await _handleFile(file);
           },
         );
       case AppMode.audio:
