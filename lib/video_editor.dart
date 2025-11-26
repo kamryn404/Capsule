@@ -471,8 +471,9 @@ class _VideoEditorState extends State<VideoEditor> {
         final tempDir = await getTemporaryDirectory();
         outputPath = '${tempDir.path}/compressed_${DateTime.now().millisecondsSinceEpoch}.${_outputFormat == 'vp9' ? 'webm' : 'mp4'}';
       } else {
+        final inputBasename = p.basenameWithoutExtension(widget.file.path);
         final FileSaveLocation? result = await getSaveLocation(
-          suggestedName: 'compressed.${_outputFormat == 'vp9' ? 'webm' : 'mp4'}',
+          suggestedName: '$inputBasename.${_outputFormat == 'vp9' ? 'webm' : 'mp4'}',
           acceptedTypeGroups: [
             XTypeGroup(
               label: 'Videos',

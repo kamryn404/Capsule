@@ -574,8 +574,9 @@ class _ImageEditorState extends State<ImageEditor> {
         }
       }
     } else {
+      final inputBasename = p.basenameWithoutExtension(widget.file.path);
       final FileSaveLocation? result = await getSaveLocation(
-        suggestedName: 'compressed.$_outputFormat',
+        suggestedName: '$inputBasename.$_outputFormat',
         acceptedTypeGroups: [
           XTypeGroup(
             label: 'Images',

@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
+import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:media_kit/media_kit.dart';
 
@@ -135,7 +136,13 @@ class _AudioEditorState extends State<AudioEditor> {
     _generatePreview();
   }
 
+  void _pauseAllPlayers() {
+    _originalPlayer?.pause();
+    _compressedPlayer?.pause();
+  }
+
   void _onScrubChanged(double value) {
+    _pauseAllPlayers();
     setState(() {
       _scrubPosition = value;
     });
@@ -143,6 +150,7 @@ class _AudioEditorState extends State<AudioEditor> {
   }
 
   void _onBitrateChanged(double value) {
+    _pauseAllPlayers();
     setState(() {
       _bitrate = value;
     });
@@ -173,7 +181,7 @@ class _AudioEditorState extends State<AudioEditor> {
                   child: _AudioPanel(
                     player: _originalPlayer,
                     label: 'Original',
-                    color: Colors.blue.withValues(alpha: 0.1),
+                    color: Colors.grey[900]!,
                     onTap: () => _togglePlay(_originalPlayer),
                   ),
                 ),
@@ -184,7 +192,7 @@ class _AudioEditorState extends State<AudioEditor> {
                   child: _AudioPanel(
                     player: _compressedPlayer,
                     label: 'Compressed',
-                    color: Colors.orange.withValues(alpha: 0.1),
+                    color: Colors.grey[900]!,
                     onTap: () => _togglePlay(_compressedPlayer),
                   ),
                 ),
@@ -221,6 +229,7 @@ class _AudioEditorState extends State<AudioEditor> {
             },
             onFormatChanged: (newValue) {
               if (newValue != null) {
+                _pauseAllPlayers();
                 setState(() {
                   _outputFormat = newValue;
                 });
@@ -368,8 +377,9 @@ class _AudioEditorState extends State<AudioEditor> {
 
     try {
       final ext = _outputFormat == 'mp3' ? 'mp3' : (_outputFormat == 'opus' ? 'opus' : 'ogg');
+      final inputBasename = p.basenameWithoutExtension(widget.file.path);
       final FileSaveLocation? result = await getSaveLocation(
-        suggestedName: 'compressed.$ext',
+        suggestedName: '$inputBasename.$ext',
         acceptedTypeGroups: [
           XTypeGroup(
             label: 'Audio',
@@ -517,18 +527,18 @@ class _AudioPanelState extends State<_AudioPanel> {
           children: [
             Text(widget.label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
             const SizedBox(height: 16),
-            // Custom Play Button to control hover state manually
+            // Rounded rectangle play button
             AnimatedContainer(
               duration: const Duration(milliseconds: 200),
               width: 80,
               height: 80,
               decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: isHighlighted ? Colors.white.withValues(alpha: 0.2) : Colors.transparent,
+                borderRadius: BorderRadius.circular(20),
+                color: isHighlighted ? Colors.white.withValues(alpha: 0.15) : Colors.white.withValues(alpha: 0.08),
               ),
               child: Icon(
-                isPlaying ? Icons.pause_circle_filled : Icons.play_circle_filled,
-                size: 64,
+                isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                size: 48,
                 color: isHighlighted ? Colors.white : Colors.white70,
               ),
             ),

@@ -319,7 +319,7 @@ class _BatchViewState extends State<BatchView> {
       }
 
       final scaleFilter = 'scale=trunc(iw*${s.resolution}/2)*2:trunc(ih*${s.resolution}/2)*2';
-      final outputPath = p.join(outputDir, '${fileName}_compressed.$extension');
+      final outputPath = p.join(outputDir, '$fileName.$extension');
       
       // Get duration for progress calculation
       Duration duration = Duration.zero;
@@ -339,7 +339,7 @@ class _BatchViewState extends State<BatchView> {
     } else if (widget.mediaType == MediaType.image) {
       final s = _settings as ImageSettings;
       extension = s.outputFormat;
-      final outputPath = p.join(outputDir, '${fileName}_compressed.$extension');
+      final outputPath = p.join(outputDir, '$fileName.$extension');
       
       String scaleFilter = '';
       if (s.resolution < 1.0) {
@@ -385,7 +385,7 @@ class _BatchViewState extends State<BatchView> {
     } else if (widget.mediaType == MediaType.audio) {
       final s = _settings as AudioSettings;
       extension = s.outputFormat == 'mp3' ? 'mp3' : (s.outputFormat == 'opus' ? 'opus' : 'ogg');
-      final outputPath = p.join(outputDir, '${fileName}_compressed.$extension');
+      final outputPath = p.join(outputDir, '$fileName.$extension');
 
       String codec;
       if (s.outputFormat == 'mp3') {
