@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:cross_file/cross_file.dart';
 import 'package:flutter/material.dart';
@@ -9,10 +8,7 @@ import 'package:record/record.dart';
 class AudioRecordView extends StatefulWidget {
   final ValueChanged<XFile> onCapture;
 
-  const AudioRecordView({
-    super.key,
-    required this.onCapture,
-  });
+  const AudioRecordView({super.key, required this.onCapture});
 
   @override
   State<AudioRecordView> createState() => _AudioRecordViewState();
@@ -67,11 +63,12 @@ class _AudioRecordViewState extends State<AudioRecordView> {
     try {
       if (await _audioRecorder.hasPermission()) {
         final tempDir = await getTemporaryDirectory();
-        final path = '${tempDir.path}/audio_capture_${DateTime.now().millisecondsSinceEpoch}.m4a';
-        
+        final path =
+            '${tempDir.path}/audio_capture_${DateTime.now().millisecondsSinceEpoch}.m4a';
+
         debugPrint('Starting audio recording to $path');
         await _audioRecorder.start(const RecordConfig(), path: path);
-        
+
         setState(() {
           _isRecording = true;
         });
@@ -89,11 +86,11 @@ class _AudioRecordViewState extends State<AudioRecordView> {
       debugPrint('Stopping audio recording...');
       final path = await _audioRecorder.stop();
       _stopTimer();
-      
+
       setState(() {
         _isRecording = false;
       });
-      
+
       if (path != null) {
         debugPrint('Audio recording finished: $path');
         widget.onCapture(XFile(path));
@@ -133,7 +130,9 @@ class _AudioRecordViewState extends State<AudioRecordView> {
                     height: 100,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: _isRecording ? Colors.red.withValues(alpha: 0.2) : Colors.white.withValues(alpha: 0.1),
+                      color: _isRecording
+                          ? Colors.red.withValues(alpha: 0.2)
+                          : Colors.white.withValues(alpha: 0.1),
                       border: Border.all(
                         color: _isRecording ? Colors.red : Colors.white,
                         width: 4,
@@ -155,7 +154,6 @@ class _AudioRecordViewState extends State<AudioRecordView> {
             ),
           ),
         ),
-
       ],
     );
   }

@@ -535,7 +535,7 @@ class _VideoEditorState extends State<VideoEditor> {
       } else {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Video saved successfully')),
+            SnackBar(content: Text('Video saved to $outputPath')),
           );
         }
       }
