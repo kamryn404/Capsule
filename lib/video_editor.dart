@@ -52,11 +52,19 @@ class _VideoEditorState extends State<VideoEditor> {
   bool _isCompositeReady = false;
   double _bitrate = 5000; // kbps
   double _maxBitrate = 10000; // kbps
-  String _outputFormat = 'av1'; // av1 or vp9
+  String _outputFormat = 'h265'; // av1, vp9, h265, h264
   final ValueNotifier<double> _scrubPosition = ValueNotifier(0.0); // 0.0 to 1.0
   Duration _videoDuration = Duration.zero;
   double _progress = 0.0;
+  
+  String? _av1Encoder;
+  String? _h265Encoder;
+  String? _h264Encoder;
+  
   bool _hasAv1Hardware = false;
+  bool _hasH265Hardware = false;
+  bool _hasH265Software = false;
+  bool _hasH264 = false;
   String? _originalSize;
   double _resolution = 1.0; // 1.0, 0.5, 0.25
   double? _aspectRatio;
@@ -135,9 +143,28 @@ class _VideoEditorState extends State<VideoEditor> {
         debugPrint('Error getting file size: $e');
       }
 
-      // Check for hardware acceleration
+      // Check for hardware acceleration and encoders
       try {
-        _hasAv1Hardware = await _ffmpegService.hasEncoder('av1_videotoolbox');
+        _av1Encoder = await _findEncoder(['av1_videotoolbox', 'av1_nvenc', 'av1_amf', 'av1_qsv', 'av1_vaapi']);
+        _h265Encoder = await _findEncoder(['hevc_videotoolbox', 'hevc_mediacodec', 'hevc_nvenc', 'hevc_amf', 'hevc_qsv', 'hevc_vaapi']);
+        _h264Encoder = await _findEncoder(['h264_videotoolbox', 'h264_mediacodec', 'h264_nvenc', 'h264_amf', 'h264_qsv', 'h264_vaapi']);
+        
+        // Fallback to software if no hardware
+        final usingSystemFfmpeg = await _ffmpegService.isUsingSystemFfmpeg();
+        if (usingSystemFfmpeg) {
+          _h265Encoder ??= await _ffmpegService.hasEncoder('libx265') ? 'libx265' : null;
+        }
+        _h264Encoder ??= await _ffmpegService.hasEncoder('libx264') ? 'libx264' : null;
+        
+        _hasAv1Hardware = _av1Encoder != null && !_av1Encoder!.startsWith('lib');
+        _hasH265Hardware = _h265Encoder != null && !_h265Encoder!.startsWith('lib');
+        _hasH265Software = _h265Encoder == 'libx265';
+        _hasH264 = _h264Encoder != null;
+        
+        // Set default format based on availability
+        if (_outputFormat == 'h265' && _h265Encoder == null) {
+          _outputFormat = 'h264';
+        }
       } catch (e) {
         debugPrint('Error checking encoders: $e');
       }
@@ -239,14 +266,15 @@ class _VideoEditorState extends State<VideoEditor> {
         ),
 
         // Layer 2: Floating Controls
-        Positioned(
-          left: isNarrow ? 20 : null,
-          right: 20,
-          bottom: 20,
-          child: ValueListenableBuilder<double>(
-            valueListenable: _scrubPosition,
-            builder: (context, scrubPos, _) {
-              return MediaControls(
+        if (_aspectRatio != null)
+          Positioned(
+            left: isNarrow ? 20 : null,
+            right: 20,
+            bottom: 20,
+            child: ValueListenableBuilder<double>(
+              valueListenable: _scrubPosition,
+              builder: (context, scrubPos, _) {
+                return MediaControls(
                 width: isNarrow ? double.infinity : 350,
                 scrubPosition: scrubPos,
                 duration: _videoDuration,
@@ -315,9 +343,46 @@ class _VideoEditorState extends State<VideoEditor> {
                 onClear: widget.onClear,
                 onSave: widget.onSaveBatch ?? _saveVideo,
                 formatItems: [
+                  if (_h265Encoder != null)
+                    DropdownMenuItem(
+                      value: 'h265',
+                      child: Row(
+                        children: [
+                          const Text('H.265 (MP4)'),
+                          if (_hasH265Hardware) ...[
+                            const SizedBox(width: 4),
+                            const Icon(Icons.bolt, size: 16, color: Colors.amber),
+                            const Text(' HW', style: TextStyle(fontSize: 12, color: Colors.amber)),
+                          ],
+                        ],
+                      ),
+                    ),
+                  if (_h264Encoder != null)
+                    DropdownMenuItem(
+                      value: 'h264',
+                      child: Row(
+                        children: [
+                          const Text('H.264 (MP4)'),
+                          if (_h264Encoder != null && !_h264Encoder!.startsWith('lib')) ...[
+                            const SizedBox(width: 4),
+                            const Icon(Icons.bolt, size: 16, color: Colors.amber),
+                            const Text(' HW', style: TextStyle(fontSize: 12, color: Colors.amber)),
+                          ],
+                        ],
+                      ),
+                    ),
                   DropdownMenuItem(
                     value: 'av1',
-                    child: Text('AV1 (MP4)${_hasAv1Hardware ? " [HW]" : ""}'),
+                    child: Row(
+                      children: [
+                        const Text('AV1 (MP4)'),
+                        if (_hasAv1Hardware) ...[
+                          const SizedBox(width: 4),
+                          const Icon(Icons.bolt, size: 16, color: Colors.amber),
+                          const Text(' HW', style: TextStyle(fontSize: 12, color: Colors.amber)),
+                        ],
+                      ],
+                    ),
                   ),
                   const DropdownMenuItem(value: 'vp9', child: Text('VP9 (WebM)')),
                 ],
@@ -357,15 +422,26 @@ class _VideoEditorState extends State<VideoEditor> {
       String speed = '';
       
       if (_outputFormat == 'av1') {
-        if (_hasAv1Hardware) {
-          codec = 'av1_videotoolbox';
+        if (_av1Encoder != null) {
+          codec = _av1Encoder!;
         } else {
           codec = 'libaom-av1';
           speed = '-cpu-used 8'; // Fastest for preview
         }
-      } else {
+      } else if (_outputFormat == 'vp9') {
         codec = 'libvpx-vp9';
         speed = '-cpu-used 5';
+      } else if (_outputFormat == 'h265') {
+        codec = _h265Encoder ?? 'libx265';
+        if (_hasH265Software) {
+          speed = '-preset ultrafast';
+        }
+      } else {
+        // h264 or default
+        codec = _h264Encoder ?? 'libx264';
+        if (codec == 'libx264') {
+          speed = '-preset ultrafast';
+        }
       }
       
       debugPrint('Generating preview with codec: $codec');
@@ -408,7 +484,7 @@ class _VideoEditorState extends State<VideoEditor> {
       } catch (e) {
         debugPrint('Preview generation failed with $codec: $e');
         // Fallback to H.264 if VP9/AV1 fails
-        if (_outputFormat == 'vp9' || _outputFormat == 'av1') {
+        if (_outputFormat == 'vp9' || _outputFormat == 'av1' || _outputFormat == 'h265') {
           debugPrint('Falling back to H.264 for preview');
           final fallbackTask = await _ffmpegService.execute(
             '-y -ss $startTimeStr -t 2 -i "${widget.file.path}" -vf $scaleFilter -c:v libx264 -preset ultrafast -b:v ${_bitrate.round()}k -an "$compressedClipPath"'
@@ -495,15 +571,26 @@ class _VideoEditorState extends State<VideoEditor> {
       String speed = '';
       
       if (_outputFormat == 'av1') {
-        if (_hasAv1Hardware) {
-          codec = 'av1_videotoolbox';
+        if (_av1Encoder != null) {
+          codec = _av1Encoder!;
         } else {
           codec = 'libaom-av1';
           speed = '-cpu-used 6'; // Faster encoding (4-6 is good balance, 8 is fastest)
         }
-      } else {
+      } else if (_outputFormat == 'vp9') {
         codec = 'libvpx-vp9';
         speed = '-cpu-used 6'; // Faster encoding
+      } else if (_outputFormat == 'h265') {
+        codec = _h265Encoder ?? 'libx265';
+        if (_hasH265Software) {
+          speed = '-preset fast';
+        }
+      } else {
+        // h264
+        codec = _h264Encoder ?? 'libx264';
+        if (codec == 'libx264') {
+          speed = '-preset fast';
+        }
       }
 
       debugPrint('Saving video with codec: $codec');
@@ -584,5 +671,14 @@ class _VideoEditorState extends State<VideoEditor> {
       i++;
     }
     return '${v.toStringAsFixed(decimals)} ${suffixes[i]}';
+  }
+
+  Future<String?> _findEncoder(List<String> candidates) async {
+    for (final encoder in candidates) {
+      if (await _ffmpegService.hasEncoder(encoder)) {
+        return encoder;
+      }
+    }
+    return null;
   }
 }

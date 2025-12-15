@@ -89,6 +89,27 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   Future<void> _handleFile(XFile file) async {
+    // Check extensions to avoid slow probing
+    final ext = p.extension(file.path).toLowerCase();
+    ffmpeg.MediaType? type;
+
+    if (['.jpg', '.jpeg', '.png', '.webp', '.avif', '.heic', '.bmp', '.tiff', '.tif', '.gif'].contains(ext)) {
+      type = ffmpeg.MediaType.image;
+    } else if (['.mp4', '.webm', '.mkv', '.mov', '.avi', '.flv', '.wmv', '.m4v', '.ts', '.3gp', '.m2ts', '.mts'].contains(ext)) {
+      type = ffmpeg.MediaType.video;
+    } else if (['.mp3', '.aac', '.ogg', '.wav', '.flac', '.m4a', '.opus', '.aiff', '.wma', '.m4b'].contains(ext)) {
+      type = ffmpeg.MediaType.audio;
+    }
+
+    if (type != null) {
+      setState(() {
+        _capturedFile = file;
+        _capturedMediaType = type;
+        _appMode = AppMode.compress;
+      });
+      return;
+    }
+
     setState(() {
       _isProbing = true;
     });

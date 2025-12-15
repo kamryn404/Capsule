@@ -41,6 +41,7 @@ abstract class FfmpegService {
   Future<ProbeResult> probeFile(String path);
   Future<bool> hasEncoder(String encoderName);
   Future<bool> hasPixelFormat(String encoderName, String pixelFormat);
+  Future<bool> isUsingSystemFfmpeg();
   Future<void> init();
 }
 
@@ -58,6 +59,11 @@ class MobileFfmpegService implements FfmpegService {
   @override
   Future<void> init() async {
     // No initialization needed for mobile
+  }
+
+  @override
+  Future<bool> isUsingSystemFfmpeg() async {
+    return false;
   }
 
   @override
@@ -224,8 +230,12 @@ class MobileFfmpegService implements FfmpegService {
 
   @override
   Future<bool> hasEncoder(String encoderName) async {
-    // FFmpegKit min-gpl has standard encoders.
-    return false;
+    final completer = Completer<bool>();
+    await FFmpegKit.executeAsync('-encoders', (session) async {
+      final output = await session.getAllLogsAsString();
+      completer.complete(output?.contains(encoderName) ?? false);
+    });
+    return completer.future;
   }
 
   @override
@@ -238,6 +248,15 @@ class MobileFfmpegService implements FfmpegService {
 
 class DesktopFfmpegService implements FfmpegService {
   String? _binaryPath;
+  bool _isSystemFfmpeg = false;
+
+  @override
+  Future<bool> isUsingSystemFfmpeg() async {
+    if (_binaryPath == null) {
+      await init();
+    }
+    return _isSystemFfmpeg;
+  }
 
   @override
   Future<void> init() async {
@@ -254,6 +273,7 @@ class DesktopFfmpegService implements FfmpegService {
         final systemPath = result.stdout.toString().trim().split('\n').first;
         if (systemPath.isNotEmpty) {
           _binaryPath = systemPath;
+          _isSystemFfmpeg = true;
           debugPrint('Using system FFmpeg at $_binaryPath');
           return;
         }
@@ -263,6 +283,7 @@ class DesktopFfmpegService implements FfmpegService {
     }
 
     // Fallback to bundled ffmpeg
+    _isSystemFfmpeg = false;
     debugPrint('System FFmpeg not found, using bundled binary');
     
     final appDir = await getApplicationSupportDirectory();

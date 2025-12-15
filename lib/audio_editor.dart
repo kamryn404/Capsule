@@ -300,7 +300,6 @@ class _AudioEditorState extends State<AudioEditor> {
 
     try {
       final tempDir = await getTemporaryDirectory();
-      final originalClipPath = '${tempDir.path}/preview_original.wav'; // Use WAV for intermediate
       final ext = _outputFormat == 'mp3' ? 'mp3' : (_outputFormat == 'opus' ? 'opus' : 'ogg');
       final compressedClipPath = '${tempDir.path}/preview_compressed.$ext';
 
@@ -308,13 +307,7 @@ class _AudioEditorState extends State<AudioEditor> {
       final startTime = _audioDuration.inMilliseconds * _scrubPosition / 1000.0;
       final startTimeStr = startTime.toStringAsFixed(3);
 
-      // 1. Extract original clip (5s)
-      // Use PCM for original preview to avoid re-encoding artifacts in the "original" reference
-      await _ffmpegService.execute(
-        '-y -ss $startTimeStr -t 5 -i "${widget.file.path}" -c:a pcm_s16le "$originalClipPath"'
-      ).then((task) => task.done);
-
-      // 2. Compress clip (5s)
+      // 1. Compress clip (5s)
       String codec;
       if (_outputFormat == 'mp3') {
         codec = 'libmp3lame';
@@ -330,7 +323,28 @@ class _AudioEditorState extends State<AudioEditor> {
       _currentPreviewTask = task;
       await task.done;
 
-      // 3. Update players
+      // 2. Update players
+      // For original, we just seek the main player to the scrub position
+      // But to have a "looping 5s preview", we might need to handle playback manually or use a clip?
+      // Actually, the user wants to optimize.
+      // If we just play the original file, we need to ensure it loops the 5s segment.
+      // MediaKit doesn't easily support "loop region" on the main file without manual seeking.
+      // However, creating a clip is what caused the delay.
+      // Let's try to just play the original file from the scrub point.
+      // But the compressed one is a 5s clip. They will desync if one loops and the other continues.
+      // To keep them synced and optimized:
+      // We can't easily make the original player loop a 5s segment without a clip.
+      // BUT, we can use the "copy" codec to extract the original clip INSTANTLY.
+      // -c copy is extremely fast. It might not be frame-perfect, but for audio it's usually fine or close enough.
+      // Let's try -c copy for the original clip.
+
+      final originalClipPath = '${tempDir.path}/preview_original_copy${p.extension(widget.file.path)}';
+      
+      // Use -c copy for instant extraction of original segment
+      await _ffmpegService.execute(
+        '-y -ss $startTimeStr -t 5 -i "${widget.file.path}" -c copy "$originalClipPath"'
+      ).then((task) => task.done);
+
       final oldOriginal = _originalPlayer;
       final oldCompressed = _compressedPlayer;
 

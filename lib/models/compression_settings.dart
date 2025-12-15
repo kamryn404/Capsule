@@ -1,12 +1,12 @@
 abstract class CompressionSettings {}
 
 class VideoSettings extends CompressionSettings {
-  final String outputFormat; // 'av1' or 'vp9'
+  final String outputFormat; // 'av1', 'vp9', 'h264', 'h265'
   final double bitrate;
   final double resolution; // 1.0, 0.5, 0.25
 
   VideoSettings({
-    this.outputFormat = 'av1',
+    this.outputFormat = 'h265',
     this.bitrate = 5000,
     this.resolution = 1.0,
   });
