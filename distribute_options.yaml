@@ -10,7 +10,7 @@ releases:
         package:
           platform: linux
           target: appimage
-      - name: windows-msix
+      - name: windows-exe
         package:
           platform: windows
-          target: msix
+          target: exe
