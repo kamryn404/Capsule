@@ -116,7 +116,7 @@ jobs:
         run: rm -rf dist/ build/
       
       - name: Build Linux AppImage
-        run: dart run fastforge release --name release --jobs linux-appimage
+        run: dart run fastforge:main release --name release --jobs linux-appimage
       
       - name: Upload Linux artifact
         uses: actions/upload-artifact@v4
