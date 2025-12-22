@@ -275,52 +275,46 @@ class AppPackageMakerAppImage extends AppPackageMaker {
         allReferencedSharedLibs.addAll(referencedSharedLibs);
       }
 
-      if (allReferencedSharedLibs.isNotEmpty) {
-        await $(
-          'cp',
-          [
-            '-n', // Don't overwrite existing files
-            ...allReferencedSharedLibs,
-            path.join(
-              makeConfig.packagingDirectory.path,
-              '${makeConfig.appName}.AppDir/usr/lib',
-            ),
-          ],
-        ).then((value) {
-          // cp -n returns exit code 1 if files were skipped, but that's ok
-          if (value.exitCode != 0 && !value.stderr.toString().contains('not replaced')) {
-            throw MakeError(value.stderr as String);
-          }
-        });
-      }
+      final usrLibDir = path.join(
+        makeConfig.packagingDirectory.path,
+        '${makeConfig.appName}.AppDir/usr/lib',
+      );
 
-      await Future.wait(
-        makeConfig.include.map((so) async {
-          final file = await $('locate', [so]).then((value) {
+      // Copy shared libs sequentially to avoid parallel collisions and command line length limits
+      for (final libPath in allReferencedSharedLibs) {
+        final destPath = path.join(usrLibDir, path.basename(libPath));
+        if (FileSystemEntity.typeSync(destPath) == FileSystemEntityType.notFound) {
+          await $('cp', ['-f', libPath, destPath]).then((value) {
             if (value.exitCode != 0) {
               throw MakeError(value.stderr as String);
             }
-            return value.stdout as String;
-          }).then((out) {
-            final paths = out
-                .split('\n')
-                .where((p) => p.isNotEmpty && !p.contains('/Trash'))
-                .toList();
-            if (paths.isEmpty) {
-              throw MakeError("Can't find specified shared object $so");
-            }
-            return File(paths.first.trim());
           });
+        }
+      }
 
-          await file.copy(
-            path.join(
-              makeConfig.packagingDirectory.path,
-              '${makeConfig.appName}.AppDir/usr/lib/',
-              path.basename(file.path),
-            ),
-          );
-        }),
-      );
+      // Copy included libs sequentially
+      for (final so in makeConfig.include) {
+        final file = await $('locate', [so]).then((value) {
+          if (value.exitCode != 0) {
+            throw MakeError(value.stderr as String);
+          }
+          return value.stdout as String;
+        }).then((out) {
+          final paths = out
+              .split('\n')
+              .where((p) => p.isNotEmpty && !p.contains('/Trash'))
+              .toList();
+          if (paths.isEmpty) {
+            throw MakeError("Can't find specified shared object $so");
+          }
+          return File(paths.first.trim());
+        });
+
+        final destPath = path.join(usrLibDir, path.basename(file.path));
+        if (FileSystemEntity.typeSync(destPath) == FileSystemEntityType.notFound) {
+          await file.copy(destPath);
+        }
+      }
 
       var outputMakeConfig = MakeConfig().copyWith(makeConfig)
         ..packageFormat = 'AppImage';
