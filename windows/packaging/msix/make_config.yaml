@@ -1,0 +1,7 @@
+display_name: Capsule
+publisher_display_name: Capsule
+publisher: CN=Capsule
+identity_name: com.example.capsule
+msix_version: 1.0.0.0
+logo_path: assets/icon.png
+capabilities: internetClient, microphone, webcam

@@ -51,7 +51,7 @@ dependencies:
   record: ^6.1.2
   image_picker: ^1.0.4
   camera_macos: ^0.0.9
-  ffmpeg_kit_flutter_new_full: ^4.1.0
+  ffmpeg_kit_flutter_new_full: ^2.0.0
   gal: ^2.3.2
   permission_handler: ^12.0.1
   flutter_svg: ^2.2.3
@@ -67,6 +67,8 @@ dev_dependencies:
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
   flutter_launcher_icons: ^0.14.4
+  fastforge: ^0.6.6
+  msix: ^3.16.1
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -105,9 +107,19 @@ flutter:
 
 flutter_launcher_icons:
   android: "ic_launcher"
-  ios: false
+  ios: false                   # iOS project is incomplete, skip for now
   macos:
     generate: true
-    image_path: "assets/icon_bg.png"
-  image_path: "assets/icon_bg.png"
-  min_sdk_android: 21 # android min sdk min:16, default 21
+    image_path: "assets/icon.png"
+  windows:
+    generate: true
+    image_path: "assets/icon.png"
+    icon_size: 256
+  linux:
+    generate: true
+    image_path: "assets/icon.png"
+  image_path: "assets/icon.png"
+  min_sdk_android: 21
+  adaptive_icon_background: "#212121"
+
+

@@ -1,0 +1,16 @@
+output: dist/
+releases:
+  - name: release
+    jobs:
+      - name: macos-dmg
+        package:
+          platform: macos
+          target: dmg
+      - name: linux-appimage
+        package:
+          platform: linux
+          target: appimage
+      - name: windows-msix
+        package:
+          platform: windows
+          target: msix
