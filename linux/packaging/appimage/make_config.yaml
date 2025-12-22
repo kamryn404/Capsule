@@ -1,2 +1,5 @@
 display_name: Capsule
-icon: assets/icon.png
+icon: assets/icon_foreground.png
+categories:
+  - Utility
+startup_wm_class: com.example.capsule

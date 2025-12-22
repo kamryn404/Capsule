@@ -41,6 +41,7 @@ class AppPackageMakerAppImage extends AppPackageMaker {
             /// to this:
             ///  /lib64/libkeybinder-3.0.so.0
             .map((line) => line.split(' => ')[1].trim().split(' ').first.trim())
+            .where((path) => path.startsWith('/'))
             .toList()
           ..sort();
 
@@ -112,10 +113,22 @@ class AppPackageMakerAppImage extends AppPackageMaker {
         path.join(
           makeConfig.packagingDirectory.path,
           '${makeConfig.appName}.AppDir',
-          '${makeConfig.appName}${path.extension(makeConfig.icon)}',
+          '${makeConfig.appBinaryName}${path.extension(makeConfig.icon)}',
         ),
       );
 
+      final iconScalable = path.join(
+        makeConfig.packagingDirectory.path,
+        '${makeConfig.appName}.AppDir/usr/share/icons/hicolor/scalable/apps',
+      );
+      final icon1024x1024 = path.join(
+        makeConfig.packagingDirectory.path,
+        '${makeConfig.appName}.AppDir/usr/share/icons/hicolor/1024x1024/apps',
+      );
+      final icon512x512 = path.join(
+        makeConfig.packagingDirectory.path,
+        '${makeConfig.appName}.AppDir/usr/share/icons/hicolor/512x512/apps',
+      );
       final icon256x256 = path.join(
         makeConfig.packagingDirectory.path,
         '${makeConfig.appName}.AppDir/usr/share/icons/hicolor/256x256/apps',
@@ -127,27 +140,66 @@ class AppPackageMakerAppImage extends AppPackageMaker {
 
       await $('mkdir', [
         '-p',
-        icon128x128,
+        iconScalable,
+        icon1024x1024,
+        icon512x512,
         icon256x256,
+        icon128x128,
       ]).then((value) {
         if (value.exitCode != 0) {
           throw MakeError(value.stderr as String);
         }
       });
 
-      await iconFile.copy(
-        path.join(
-          icon128x128,
-          '${makeConfig.appName}${path.extension(makeConfig.icon)}',
-        ),
-      );
+      if (path.extension(makeConfig.icon) == '.svg') {
+        await iconFile.copy(
+          path.join(
+            iconScalable,
+            '${makeConfig.appBinaryName}.svg',
+          ),
+        );
+      } else {
+        final sizes = {
+          '16x16': 16,
+          '32x32': 32,
+          '48x48': 48,
+          '64x64': 64,
+          '128x128': 128,
+          '256x256': 256,
+          '512x512': 512,
+          '1024x1024': 1024,
+        };
 
-      await iconFile.copy(
-        path.join(
-          icon256x256,
-          '${makeConfig.appName}${path.extension(makeConfig.icon)}',
-        ),
-      );
+        for (final entry in sizes.entries) {
+          final dir = path.join(
+            makeConfig.packagingDirectory.path,
+            '${makeConfig.appName}.AppDir/usr/share/icons/hicolor/${entry.key}/apps',
+          );
+          await $('mkdir', ['-p', dir]);
+
+          final targetPath = path.join(
+            dir,
+            '${makeConfig.appBinaryName}${path.extension(makeConfig.icon)}',
+          );
+
+          try {
+            await $(
+              'magick',
+              [
+                makeConfig.icon,
+                '-resize',
+                '${entry.value}x${entry.value}',
+                '-quality',
+                '100',
+                targetPath,
+              ],
+            );
+          } catch (e) {
+            // Fallback to copy if magick fails
+            await iconFile.copy(targetPath);
+          }
+        }
+      }
 
       if (makeConfig.metainfo != null) {
         final metainfoDir = path.join(

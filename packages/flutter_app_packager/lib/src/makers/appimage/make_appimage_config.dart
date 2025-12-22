@@ -30,7 +30,7 @@ class AppImageAction {
   }
 }
 
-class MakeAppImageConfig extends MakeConfig {
+class MakeAppImageConfig extends MakeLinuxPackageConfig {
   MakeAppImageConfig({
     required this.displayName,
     required this.icon,
@@ -42,12 +42,14 @@ class MakeAppImageConfig extends MakeConfig {
     this.genericName = 'A Flutter Application',
     this.supportedMimeType,
     this.metainfo,
+    this.startupWMClass,
   });
   factory MakeAppImageConfig.fromJson(Map<String, dynamic> map) {
     return MakeAppImageConfig(
       displayName: map['display_name'] as String,
       icon: map['icon'] as String,
       metainfo: map['metainfo'] as String?,
+      startupWMClass: map['startup_wm_class'] as String?,
       include: (map['include'] as List<dynamic>? ?? []).cast<String>(),
       keywords: (map['keywords'] as List<dynamic>? ?? []).cast<String>(),
       categories: (map['categories'] as List<dynamic>? ?? []).cast<String>(),
@@ -76,28 +78,31 @@ class MakeAppImageConfig extends MakeConfig {
   final String displayName;
   final List<String> include;
   List<String>? supportedMimeType;
+  final String? startupWMClass;
 
   String get desktopFileContent {
     final fields = {
       'Name': displayName,
       'GenericName': genericName,
-      'Exec': 'LD_LIBRARY_PATH=usr/lib $appName %u',
-      'Icon': appName,
+      'Exec': 'LD_LIBRARY_PATH=usr/lib $appBinaryName %u',
+      'Icon': appBinaryName,
       'Type': 'Application',
       'StartupNotify': startupNotify ? 'true' : 'false',
+      if (startupWMClass != null) 'StartupWMClass': startupWMClass!,
       if (supportedMimeType != null && supportedMimeType!.isNotEmpty)
         'MimeType': '${supportedMimeType!.join(';')};',
-      if (categories.isNotEmpty) 'Categories': categories.join(';'),
-      if (keywords.isNotEmpty) 'Keywords': keywords.join(';'),
+      'Categories': (categories.isEmpty ? ['Utility'] : categories).join(';') +
+          (categories.isEmpty ? ';' : (categories.last.endsWith(';') ? '' : ';')),
+      if (keywords.isNotEmpty) 'Keywords': '${keywords.join(';')};',
       if (this.actions.isNotEmpty)
-        'Actions': this.actions.map((e) => e.label).join(';'),
+        'Actions': '${this.actions.map((e) => e.label).join(';')};',
     }.entries.map((e) => '${e.key}=${e.value}').join('\n');
 
     final actions = this.actions.map((action) {
       final fields = {
         'Name': action.name,
         'Exec':
-            'LD_LIBRARY_PATH=usr/lib $appName ${action.arguments.join(' ')} %u',
+            'LD_LIBRARY_PATH=usr/lib $appBinaryName ${action.arguments.join(' ')} %u',
       };
       return '[Desktop Action ${action.label}]\n${fields.entries.map((e) => '${e.key}=${e.value}').join('\n')}';
     }).join('\n\n');
