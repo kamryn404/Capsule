@@ -74,11 +74,22 @@ jobs:
       - name: Install Linux dependencies
         run: |
           sudo apt-get update
+          # Core build tools and GTK
           sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev libstdc++-12-dev
-          # Audio libraries (ALSA for volume_controller, PulseAudio for media_kit)
+          # X11/Wayland for window_manager
+          sudo apt-get install -y libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev
+          # Audio libraries (ALSA for volume_controller/record, PulseAudio for media_kit)
           sudo apt-get install -y libasound2-dev libpulse-dev
           # OpenCV for camera_linux plugin
           sudo apt-get install -y libopencv-dev
+          # mpv for media_kit_video plugin
+          sudo apt-get install -y libmpv-dev
+          # udev for permission_handler
+          sudo apt-get install -y libudev-dev
+          # GStreamer for video playback (fallback)
+          sudo apt-get install -y libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev
+          # Secret service for secure storage
+          sudo apt-get install -y libsecret-1-dev libjsoncpp-dev
           # AppImage dependencies
           sudo apt-get install -y libfuse2 appstream
       
