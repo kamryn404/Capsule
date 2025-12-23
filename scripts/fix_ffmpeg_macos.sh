@@ -41,6 +41,12 @@ if [ -d "$PACKAGE_DIR/macos/Frameworks" ]; then
                 NEEDS_RESET=1
                 break
             fi
+            # Check for duplicate FlutterMacOS (from "FlutterMacOS" patch)
+            if [ "$(otool -L "$binary" | grep -c "FlutterMacOS")" -gt 1 ]; then
+                echo "🚨 $binary_name has duplicate FlutterMacOS links."
+                NEEDS_RESET=1
+                break
+            fi
         fi
     done
 fi
@@ -81,15 +87,15 @@ patch_framework() {
 
     echo "   Checking $binary_name..."
     
-    # We use FlutterMacOS as a "dummy" target for redundant links.
-    # It is guaranteed to be present in the app bundle and NOT linked by FFmpeg.
-    # This avoids "duplicate linked dylib" errors and "Library not loaded" errors.
-    DUMMY_TARGET="@rpath/FlutterMacOS.framework/FlutterMacOS"
+    # We use /usr/lib/libutil.dylib as a "dummy" target.
+    # It is a system library that exists on all macOS versions but is typically NOT linked by FFmpeg or Flutter apps.
+    # This avoids "duplicate linked dylib" errors.
+    DUMMY_TARGET="/usr/lib/libutil.dylib"
 
     # Handle libiconv
     if otool -L "$binary" | grep -q "/opt/homebrew/opt/libiconv"; then
         if otool -L "$binary" | grep -q "/usr/lib/libiconv.2.dylib"; then
-            echo "      Has system libiconv. Redirecting Homebrew link to FlutterMacOS."
+            echo "      Has system libiconv. Redirecting Homebrew link to libutil."
             install_name_tool -change "/opt/homebrew/opt/libiconv/lib/libiconv.2.dylib" "$DUMMY_TARGET" "$binary"
         else
             echo "      No system libiconv. Redirecting Homebrew link to system libiconv."
@@ -100,7 +106,7 @@ patch_framework() {
     # Handle zlib
     if otool -L "$binary" | grep -q "/opt/homebrew/opt/zlib"; then
         if otool -L "$binary" | grep -q "/usr/lib/libz.1.dylib"; then
-            echo "      Has system zlib. Redirecting Homebrew link to FlutterMacOS."
+            echo "      Has system zlib. Redirecting Homebrew link to libutil."
             install_name_tool -change "/opt/homebrew/opt/zlib/lib/libz.1.dylib" "$DUMMY_TARGET" "$binary"
         else
             echo "      No system zlib. Redirecting Homebrew link to system zlib."
@@ -110,7 +116,7 @@ patch_framework() {
     
     # Verify
     echo "      > Links:"
-    otool -L "$binary" | grep -E "FlutterMacOS|libSystem|libiconv|libz" | sed 's/^/        /'
+    otool -L "$binary" | grep -E "libutil|libSystem|libiconv|libz" | sed 's/^/        /'
 }
 
 echo "🩹 Patching frameworks..."
