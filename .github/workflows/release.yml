@@ -22,6 +22,12 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
       
+      - name: Patch FFmpeg frameworks (fix libiconv paths)
+        run: bash scripts/fix_ffmpeg_macos.sh
+      
+      - name: Reinstall pods with patched frameworks
+        run: cd macos && pod deintegrate && pod install && cd ..
+      
       - name: Install fastforge
         run: dart pub global activate fastforge
       
@@ -138,13 +144,46 @@ jobs:
       - name: Display structure of downloaded files
         run: ls -R artifacts
       
+      - name: Get version from tag
+        id: version
+        run: |
+          # Extract version from tag (e.g., v0.5.0 -> 0.5.0, v0.5 -> 0.5)
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Version: $VERSION"
+      
+      - name: Rename artifacts to match version
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          mkdir -p release_files
+          
+          # Rename macOS DMG
+          for f in artifacts/**/*.dmg; do
+            if [ -f "$f" ]; then
+              cp "$f" "release_files/Capsule-v${VERSION}-macos.dmg"
+            fi
+          done
+          
+          # Rename Windows EXE
+          for f in artifacts/**/*.exe; do
+            if [ -f "$f" ]; then
+              cp "$f" "release_files/Capsule-v${VERSION}-windows.exe"
+            fi
+          done
+          
+          # Rename Linux AppImage
+          for f in artifacts/**/*.AppImage; do
+            if [ -f "$f" ]; then
+              cp "$f" "release_files/Capsule-v${VERSION}-linux.AppImage"
+            fi
+          done
+          
+          ls -la release_files/
+      
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            artifacts/**/*.dmg
-            artifacts/**/*.exe
-            artifacts/**/*.AppImage
+          files: release_files/*
           generate_release_notes: true
           draft: false
           prerelease: false
