@@ -22,25 +22,28 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
       
-      - name: Check FFmpeg framework dependencies
+      - name: Remove problematic FFmpeg plugin from macOS build
         run: |
-          SWRESAMPLE="$HOME/.pub-cache/hosted/pub.dev/ffmpeg_kit_flutter_new_full-2.0.0/macos/Frameworks/libswresample.framework/Versions/A/libswresample"
-          if [ -f "$SWRESAMPLE" ]; then
-            echo "Current libswresample dependencies:"
-            otool -L "$SWRESAMPLE" | grep -E "(libiconv|libz|homebrew)" || echo "No iconv/zlib/homebrew deps found"
-          fi
-      
-      - name: Patch FFmpeg frameworks (fix libiconv paths if needed)
-        run: |
-          # Only run if we detect homebrew paths in the frameworks
-          SWRESAMPLE="$HOME/.pub-cache/hosted/pub.dev/ffmpeg_kit_flutter_new_full-2.0.0/macos/Frameworks/libswresample.framework/Versions/A/libswresample"
-          if [ -f "$SWRESAMPLE" ] && otool -L "$SWRESAMPLE" | grep -q "/opt/homebrew\|/usr/local/opt"; then
-            echo "Homebrew paths detected, running fix script..."
-            bash scripts/fix_ffmpeg_macos.sh
-            # Reinstall pods to pick up patched frameworks
-            cd macos && pod deintegrate && pod install && cd ..
-          else
-            echo "No homebrew paths detected, skipping fix"
+          # The ffmpeg_kit_flutter_new_full package has corrupt binaries with duplicate
+          # LC_LOAD_DYLIB entries that cause linker failures. Remove it from the build.
+          # The app will use system ffmpeg via MacosHybridFfmpegService instead.
+          FFMPEG_PLUGIN="$HOME/.pub-cache/hosted/pub.dev/ffmpeg_kit_flutter_new_full-2.0.0/macos"
+          if [ -d "$FFMPEG_PLUGIN" ]; then
+            echo "Removing problematic FFmpeg frameworks to prevent linker errors..."
+            rm -rf "$FFMPEG_PLUGIN/Frameworks"
+            rm -f "$FFMPEG_PLUGIN/ffmpeg_kit_flutter_new.podspec"
+            # Create empty podspec to satisfy pod install
+            echo "Pod::Spec.new do |s|" > "$FFMPEG_PLUGIN/ffmpeg_kit_flutter_new.podspec"
+            echo "  s.name = 'ffmpeg_kit_flutter_new'" >> "$FFMPEG_PLUGIN/ffmpeg_kit_flutter_new.podspec"
+            echo "  s.version = '2.0.0'" >> "$FFMPEG_PLUGIN/ffmpeg_kit_flutter_new.podspec"
+            echo "  s.summary = 'Disabled for macOS'" >> "$FFMPEG_PLUGIN/ffmpeg_kit_flutter_new.podspec"
+            echo "  s.homepage = 'https://github.com'" >> "$FFMPEG_PLUGIN/ffmpeg_kit_flutter_new.podspec"
+            echo "  s.license = { :type => 'MIT' }" >> "$FFMPEG_PLUGIN/ffmpeg_kit_flutter_new.podspec"
+            echo "  s.author = 'none'" >> "$FFMPEG_PLUGIN/ffmpeg_kit_flutter_new.podspec"
+            echo "  s.source = { :path => '.' }" >> "$FFMPEG_PLUGIN/ffmpeg_kit_flutter_new.podspec"
+            echo "  s.platform = :osx, '10.15'" >> "$FFMPEG_PLUGIN/ffmpeg_kit_flutter_new.podspec"
+            echo "end" >> "$FFMPEG_PLUGIN/ffmpeg_kit_flutter_new.podspec"
+            echo "Created stub podspec"
           fi
       
       - name: Install fastforge
