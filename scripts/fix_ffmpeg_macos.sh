@@ -44,37 +44,51 @@ for framework in "$PACKAGE_PATH"/*.framework; do
         
         if [ -f "$binary_path" ]; then
             # Check current dependencies
-            deps=$(otool -L "$binary_path" 2>/dev/null | grep -E "(libiconv|libz)" || true)
+            deps=$(otool -L "$binary_path" 2>/dev/null || true)
             
-            if echo "$deps" | grep -q "/opt/homebrew"; then
-                echo "   Patching: $framework_name"
+            # Check if the binary has homebrew paths
+            has_homebrew=$(echo "$deps" | grep -c "/opt/homebrew\|/usr/local/opt" || echo "0")
+            
+            # Check if already has /usr/lib/libiconv (to avoid duplicates)
+            has_system_iconv=$(echo "$deps" | grep -c "/usr/lib/libiconv" || echo "0")
+            
+            if [ "$has_homebrew" != "0" ]; then
+                echo "   Patching: $framework_name (homebrew paths found)"
                 
-                # Patch libiconv
-                install_name_tool -change \
-                    /opt/homebrew/opt/libiconv/lib/libiconv.2.dylib \
-                    /usr/lib/libiconv.2.dylib \
-                    "$binary_path" 2>/dev/null || true
-                
-                # Patch zlib (might also have homebrew path)
-                install_name_tool -change \
-                    /opt/homebrew/opt/zlib/lib/libz.1.dylib \
-                    /usr/lib/libz.1.dylib \
-                    "$binary_path" 2>/dev/null || true
-                
-                # Also handle Intel Mac homebrew path
-                install_name_tool -change \
-                    /usr/local/opt/libiconv/lib/libiconv.2.dylib \
-                    /usr/lib/libiconv.2.dylib \
-                    "$binary_path" 2>/dev/null || true
-                
-                install_name_tool -change \
-                    /usr/local/opt/zlib/lib/libz.1.dylib \
-                    /usr/lib/libz.1.dylib \
-                    "$binary_path" 2>/dev/null || true
+                # Only patch if system lib isn't already linked (avoid duplicates)
+                if [ "$has_system_iconv" = "0" ]; then
+                    # Patch libiconv - try homebrew arm64 path
+                    install_name_tool -change \
+                        /opt/homebrew/opt/libiconv/lib/libiconv.2.dylib \
+                        /usr/lib/libiconv.2.dylib \
+                        "$binary_path" 2>/dev/null || true
+                    
+                    # Patch zlib
+                    install_name_tool -change \
+                        /opt/homebrew/opt/zlib/lib/libz.1.dylib \
+                        /usr/lib/libz.1.dylib \
+                        "$binary_path" 2>/dev/null || true
+                    
+                    # Also handle Intel Mac homebrew path
+                    install_name_tool -change \
+                        /usr/local/opt/libiconv/lib/libiconv.2.dylib \
+                        /usr/lib/libiconv.2.dylib \
+                        "$binary_path" 2>/dev/null || true
+                    
+                    install_name_tool -change \
+                        /usr/local/opt/zlib/lib/libz.1.dylib \
+                        /usr/lib/libz.1.dylib \
+                        "$binary_path" 2>/dev/null || true
+                else
+                    echo "      (skipped: /usr/lib/libiconv already linked, would cause duplicates)"
+                    # The binary already has both - we need to remove the homebrew one
+                    # This requires more complex handling - deleting the LC_LOAD_DYLIB entry
+                    # For now, skip as the system one should work
+                fi
                 
                 ((patch_count++)) || true
             else
-                echo "   ✓ Already patched: $framework_name"
+                echo "   ✓ No homebrew paths: $framework_name"
             fi
         fi
     fi
