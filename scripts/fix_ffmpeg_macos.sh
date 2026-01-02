@@ -1,5 +1,5 @@
 #!/bin/bash
-# fix_ffmpeg_macos.sh - Fix FFmpeg kit libiconv/zlib issues on macOS
+# fix_ffmpeg_macos.sh - Fix FFmpeg kit libiconv/zlib issues on macOS by bundling dependencies
 
 set -e
 
@@ -32,12 +32,6 @@ if [ -d "$PACKAGE_DIR/macos/Frameworks" ]; then
             # Check for duplicate libSystem (from "libSystem" patch)
             if [ "$(otool -L "$binary" | grep -c "/usr/lib/libSystem.B.dylib")" -gt 1 ]; then
                 echo "🚨 $binary_name has duplicate libSystem links."
-                NEEDS_RESET=1
-                break
-            fi
-            # Check for duplicate libiconv (from "patching" patch)
-            if [ "$(otool -L "$binary" | grep -c "/usr/lib/libiconv.2.dylib")" -gt 1 ]; then
-                echo "🚨 $binary_name has duplicate libiconv links."
                 NEEDS_RESET=1
                 break
             fi
@@ -75,54 +69,82 @@ if [ ! -d "$PACKAGE_DIR/macos/Frameworks" ]; then
     fi
 fi
 
-# 3. Patch frameworks
-patch_framework() {
-    local framework_path="$1"
-    local binary_name=$(basename "$framework_path" .framework)
-    local binary="$framework_path/$binary_name"
+# 3. Bundle dependencies
+LIBS_DIR="$PACKAGE_DIR/macos/libs"
+mkdir -p "$LIBS_DIR"
+
+bundle_lib() {
+    local lib_path="$1"
+    local dest_dir="$2"
+    local lib_name=$(basename "$lib_path")
     
-    if [ ! -f "$binary" ]; then
+    # Skip if already bundled
+    if [ -f "$dest_dir/$lib_name" ]; then
+        return
+    fi
+    
+    if [ ! -f "$lib_path" ]; then
+        echo "⚠️  Warning: Dependency $lib_path not found. Skipping bundle."
         return
     fi
 
-    echo "   Checking $binary_name..."
+    echo "      Bundling $lib_name..."
+    cp "$lib_path" "$dest_dir/"
+    chmod +w "$dest_dir/$lib_name"
     
-    # We use /usr/lib/libutil.dylib as a "dummy" target.
-    # It is a system library that exists on all macOS versions but is typically NOT linked by FFmpeg or Flutter apps.
-    # This avoids "duplicate linked dylib" errors.
-    DUMMY_TARGET="/usr/lib/libutil.dylib"
-
-    # Handle libiconv
-    if otool -L "$binary" | grep -q "/opt/homebrew/opt/libiconv"; then
-        if otool -L "$binary" | grep -q "/usr/lib/libiconv.2.dylib"; then
-            echo "      Has system libiconv. Redirecting Homebrew link to libutil."
-            install_name_tool -change "/opt/homebrew/opt/libiconv/lib/libiconv.2.dylib" "$DUMMY_TARGET" "$binary"
-        else
-            echo "      No system libiconv. Redirecting Homebrew link to system libiconv."
-            install_name_tool -change "/opt/homebrew/opt/libiconv/lib/libiconv.2.dylib" "/usr/lib/libiconv.2.dylib" "$binary"
-        fi
-    fi
-
-    # Handle zlib
-    if otool -L "$binary" | grep -q "/opt/homebrew/opt/zlib"; then
-        if otool -L "$binary" | grep -q "/usr/lib/libz.1.dylib"; then
-            echo "      Has system zlib. Redirecting Homebrew link to libutil."
-            install_name_tool -change "/opt/homebrew/opt/zlib/lib/libz.1.dylib" "$DUMMY_TARGET" "$binary"
-        else
-            echo "      No system zlib. Redirecting Homebrew link to system zlib."
-            install_name_tool -change "/opt/homebrew/opt/zlib/lib/libz.1.dylib" "/usr/lib/libz.1.dylib" "$binary"
-        fi
-    fi
+    # Patch the ID of the bundled lib
+    install_name_tool -id "@rpath/$lib_name" "$dest_dir/$lib_name"
     
-    # Verify
-    echo "      > Links:"
-    otool -L "$binary" | grep -E "libutil|libSystem|libiconv|libz" | sed 's/^/        /'
+    # Scan for dependencies of this lib
+    local deps=$(otool -L "$dest_dir/$lib_name" | grep -E "/opt/homebrew|/usr/local" | awk '{print $1}')
+    for dep in $deps; do
+        local dep_name=$(basename "$dep")
+        # Recursive bundle
+        bundle_lib "$dep" "$dest_dir"
+        # Patch dependency path in the bundled lib
+        install_name_tool -change "$dep" "@rpath/$dep_name" "$dest_dir/$lib_name"
+    done
 }
 
-echo "🩹 Patching frameworks..."
+echo "📦 Bundling dependencies..."
 
 for framework in "$PACKAGE_DIR/macos/Frameworks/"*.framework; do
-    patch_framework "$framework"
+    binary_name=$(basename "$framework" .framework)
+    binary="$framework/$binary_name"
+    
+    if [ ! -f "$binary" ]; then
+        continue
+    fi
+
+    echo "   Processing $binary_name..."
+    
+    # Find Homebrew/local dependencies
+    deps=$(otool -L "$binary" | grep -E "/opt/homebrew|/usr/local" | awk '{print $1}')
+    
+    for dep in $deps; do
+        dep_name=$(basename "$dep")
+        bundle_lib "$dep" "$LIBS_DIR"
+        
+        # Patch the framework to point to the bundled lib
+        echo "      Redirecting $dep -> @rpath/$dep_name"
+        install_name_tool -change "$dep" "@rpath/$dep_name" "$binary"
+    done
 done
+
+# 4. Patch Podspec to include bundled libraries
+PODSPEC="$PACKAGE_DIR/macos/ffmpeg_kit_flutter_new_full.podspec"
+if [ -f "$PODSPEC" ]; then
+    if ! grep -q "vendored_libraries" "$PODSPEC"; then
+        echo "📝 Patching podspec to include bundled libs..."
+        # Insert vendored_libraries after vendored_frameworks line
+        # We use a safe sed pattern
+        sed -i '' '/vendored_frameworks/a\
+    ss.osx.vendored_libraries = "libs/*.dylib"' "$PODSPEC"
+    else
+        echo "✅ Podspec already patched."
+    fi
+else
+    echo "⚠️  Podspec not found at $PODSPEC"
+fi
 
 echo "✅ Fix script completed."
