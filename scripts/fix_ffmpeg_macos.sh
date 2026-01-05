@@ -1,5 +1,18 @@
 #!/bin/bash
 # fix_ffmpeg_macos.sh - Fix FFmpeg kit libiconv/zlib issues on macOS by bundling dependencies
+#
+# The pre-built FFmpeg frameworks from ffmpeg_kit_flutter_new_full have:
+# 1. Hardcoded Homebrew library paths that don't exist on end-user machines
+# 2. Duplicate load commands for libiconv (a bug in the pre-built frameworks)
+#
+# This script:
+# 1. Downloads the FFmpeg frameworks if not present
+# 2. Patches Homebrew paths to use @rpath (bundled libraries)
+# 3. Bundles required Homebrew libraries into the app
+# 4. Updates the Xcode project to embed the bundled libraries
+#
+# The duplicate load commands issue is handled by the -Wl,-no_warn_duplicate_libraries
+# linker flag added to the Podfile.
 
 set -e
 
@@ -9,6 +22,14 @@ if [[ "$OSTYPE" != "darwin"* ]]; then
     echo "❌ This script is only for macOS."
     exit 1
 fi
+
+# Install required Homebrew dependencies for bundling
+echo "📦 Installing required Homebrew dependencies..."
+brew install libiconv fribidi srt openssl@3 harfbuzz fontconfig freetype glib pcre2 graphite2 gettext libpng || true
+
+# Determine Homebrew prefix (different on Intel vs Apple Silicon)
+HOMEBREW_PREFIX=$(brew --prefix)
+echo "   Using Homebrew prefix: $HOMEBREW_PREFIX"
 
 # Find the package in pub cache
 PUB_CACHE_HOME="${PUB_CACHE:-$HOME/.pub-cache}"
@@ -73,6 +94,60 @@ fi
 LIBS_DIR="$PACKAGE_DIR/macos/libs"
 mkdir -p "$LIBS_DIR"
 
+# Function to find a library by name in Homebrew
+find_brew_lib() {
+    local lib_name="$1"
+    local search_name="${lib_name%.dylib}"
+    search_name="${search_name%.*}"  # Remove version suffix like .2
+    
+    # Try to find the library in common Homebrew locations
+    local candidates=(
+        "$HOMEBREW_PREFIX/opt/libiconv/lib/$lib_name"
+        "$HOMEBREW_PREFIX/opt/fribidi/lib/$lib_name"
+        "$HOMEBREW_PREFIX/opt/srt/lib/$lib_name"
+        "$HOMEBREW_PREFIX/opt/openssl@3/lib/$lib_name"
+        "$HOMEBREW_PREFIX/opt/harfbuzz/lib/$lib_name"
+        "$HOMEBREW_PREFIX/opt/fontconfig/lib/$lib_name"
+        "$HOMEBREW_PREFIX/opt/freetype/lib/$lib_name"
+        "$HOMEBREW_PREFIX/opt/glib/lib/$lib_name"
+        "$HOMEBREW_PREFIX/opt/pcre2/lib/$lib_name"
+        "$HOMEBREW_PREFIX/opt/graphite2/lib/$lib_name"
+        "$HOMEBREW_PREFIX/opt/gettext/lib/$lib_name"
+        "$HOMEBREW_PREFIX/opt/libpng/lib/$lib_name"
+        "$HOMEBREW_PREFIX/opt/zlib/lib/$lib_name"
+        "$HOMEBREW_PREFIX/lib/$lib_name"
+    )
+    
+    for candidate in "${candidates[@]}"; do
+        if [ -f "$candidate" ]; then
+            echo "$candidate"
+            return 0
+        fi
+    done
+    
+    # Try a broader search
+    local found=$(find "$HOMEBREW_PREFIX" -name "$lib_name" -type f 2>/dev/null | head -n 1)
+    if [ -n "$found" ]; then
+        echo "$found"
+        return 0
+    fi
+    
+    return 1
+}
+
+# List of libraries that are safe to use from /usr/lib (system libraries)
+SYSTEM_LIBS="libz.1.dylib libbz2.1.0.dylib liblzma.5.dylib libSystem.B.dylib libc++.1.dylib libobjc.A.dylib"
+
+is_system_lib() {
+    local lib_name="$1"
+    for sys_lib in $SYSTEM_LIBS; do
+        if [ "$lib_name" = "$sys_lib" ]; then
+            return 0
+        fi
+    done
+    return 1
+}
+
 bundle_lib() {
     local lib_path="$1"
     local dest_dir="$2"
@@ -80,12 +155,18 @@ bundle_lib() {
     
     # Skip if already bundled
     if [ -f "$dest_dir/$lib_name" ]; then
-        return
+        return 0
     fi
     
+    # If the path doesn't exist, try to find it in Homebrew
     if [ ! -f "$lib_path" ]; then
-        echo "⚠️  Warning: Dependency $lib_path not found. Skipping bundle."
-        return
+        local found_path=$(find_brew_lib "$lib_name")
+        if [ -n "$found_path" ]; then
+            lib_path="$found_path"
+        else
+            echo "⚠️  Warning: Dependency $lib_name not found. Skipping bundle."
+            return 1
+        fi
     fi
 
     echo "      Bundling $lib_name..."
@@ -104,9 +185,15 @@ bundle_lib() {
         # Patch dependency path in the bundled lib
         install_name_tool -change "$dep" "@rpath/$dep_name" "$dest_dir/$lib_name"
     done
+    
+    return 0
 }
 
 echo "📦 Bundling dependencies..."
+
+# Libraries that we bundle - we need to redirect ALL references to these to @rpath
+# This includes /usr/lib, /opt/homebrew, /usr/local, and any existing @rpath references
+BUNDLED_LIBS="libiconv.2.dylib"
 
 for framework in "$PACKAGE_DIR/macos/Frameworks/"*.framework; do
     binary_name=$(basename "$framework" .framework)
@@ -118,24 +205,51 @@ for framework in "$PACKAGE_DIR/macos/Frameworks/"*.framework; do
 
     echo "   Processing $binary_name..."
     
-    # Find Homebrew/local dependencies
+    # FIRST: Redirect @rpath system libraries to /usr/lib
+    # The arm64 slice uses @rpath/libz.1.dylib but we want to use the system library
+    # Note: On modern macOS, these libraries are in the dyld cache, not as files in /usr/lib
+    # But the linker still resolves /usr/lib paths correctly
+    for sys_lib in $SYSTEM_LIBS; do
+        install_name_tool -change "@rpath/$sys_lib" "/usr/lib/$sys_lib" "$binary" 2>/dev/null || true
+    done
+    
+    # For libraries we're bundling, redirect ALL possible paths to @rpath
+    # This handles the case where different architecture slices have different paths
+    for bundled_lib in $BUNDLED_LIBS; do
+        # Redirect /usr/lib path
+        install_name_tool -change "/usr/lib/$bundled_lib" "@rpath/$bundled_lib" "$binary" 2>/dev/null || true
+        # Redirect /usr/lib/libcharset (related to libiconv)
+        install_name_tool -change "/usr/lib/libcharset.1.dylib" "@rpath/libcharset.1.dylib" "$binary" 2>/dev/null || true
+        # Redirect Homebrew paths (both Intel and Apple Silicon)
+        install_name_tool -change "/opt/homebrew/opt/libiconv/lib/$bundled_lib" "@rpath/$bundled_lib" "$binary" 2>/dev/null || true
+        install_name_tool -change "/usr/local/opt/libiconv/lib/$bundled_lib" "@rpath/$bundled_lib" "$binary" 2>/dev/null || true
+    done
+    
+    # Find Homebrew/local dependencies (both /opt/homebrew and /usr/local paths)
     deps=$(otool -L "$binary" | grep -E "/opt/homebrew|/usr/local" | awk '{print $1}')
     
     for dep in $deps; do
         dep_name=$(basename "$dep")
         
-        bundle_lib "$dep" "$LIBS_DIR"
+        # Check if this is a known system library first
+        # On modern macOS, system libraries are in the dyld cache, not as files in /usr/lib
+        # But the dynamic linker still resolves /usr/lib paths correctly
+        if is_system_lib "$dep_name"; then
+            echo "      Using system library: /usr/lib/$dep_name"
+            install_name_tool -change "$dep" "/usr/lib/$dep_name" "$binary"
+            continue
+        fi
         
-        # If bundling failed (file not found), we can't use @rpath.
-        if [ ! -f "$LIBS_DIR/$dep_name" ]; then
-             # Fallback: Redirect to system path (e.g. /usr/lib/libz.1.dylib)
-             SYSTEM_PATH="/usr/lib/$dep_name"
-             echo "      ⚠️  Failed to bundle $dep_name. Redirecting to system path: $SYSTEM_PATH"
-             install_name_tool -change "$dep" "$SYSTEM_PATH" "$binary"
+        # Try to bundle the library
+        if bundle_lib "$dep" "$LIBS_DIR"; then
+            # Patch the framework to point to the bundled lib
+            echo "      Redirecting $dep -> @rpath/$dep_name"
+            install_name_tool -change "$dep" "@rpath/$dep_name" "$binary"
         else
-             # Patch the framework to point to the bundled lib
-             echo "      Redirecting $dep -> @rpath/$dep_name"
-             install_name_tool -change "$dep" "@rpath/$dep_name" "$binary"
+            # Fallback: Check if it's a system library we might have missed
+            # Try to use /usr/lib anyway - the dyld cache might have it
+            echo "      ⚠️  Trying system library: /usr/lib/$dep_name"
+            install_name_tool -change "$dep" "/usr/lib/$dep_name" "$binary"
         fi
     done
 done
@@ -155,7 +269,7 @@ fi
 echo "📝 Updating Xcode project to embed libraries..."
 
 # Create Ruby script to update Xcode project
-cat <<EOF > scripts/update_xcode.rb
+cat <<'RUBY_EOF' > scripts/update_xcode.rb
 require 'xcodeproj'
 
 project_path = 'macos/Runner.xcodeproj'
@@ -180,7 +294,8 @@ group.files.to_a.each do |file_ref|
   end
 end
 
-Dir.glob('$PROJECT_FRAMEWORKS_DIR/*.dylib').each do |file|
+frameworks_dir = 'macos/Runner/Frameworks'
+Dir.glob("#{frameworks_dir}/*.dylib").each do |file|
   filename = File.basename(file)
   puts "Processing #{filename}..."
   
@@ -198,7 +313,7 @@ end
 
 project.save
 puts "Xcode project updated."
-EOF
+RUBY_EOF
 
 # Run Ruby script
 ruby scripts/update_xcode.rb

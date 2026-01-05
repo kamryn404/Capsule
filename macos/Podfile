@@ -38,6 +38,15 @@ end
 post_install do |installer|
   installer.pods_project.targets.each do |target|
     flutter_additional_macos_build_settings(target)
+    
+    # Add linker flag to suppress duplicate dylib warnings from FFmpeg frameworks
+    # The pre-built FFmpeg frameworks have duplicate load commands that can't be removed
+    target.build_configurations.each do |config|
+      config.build_settings['OTHER_LDFLAGS'] ||= '$(inherited)'
+      unless config.build_settings['OTHER_LDFLAGS'].include?('-Wl,-no_warn_duplicate_libraries')
+        config.build_settings['OTHER_LDFLAGS'] = "#{config.build_settings['OTHER_LDFLAGS']} -Wl,-no_warn_duplicate_libraries"
+      end
+    end
   end
 
   # Force copy the custom AppIcon.icns into the build bundle
