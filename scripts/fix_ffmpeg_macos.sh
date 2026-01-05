@@ -123,28 +123,92 @@ for framework in "$PACKAGE_DIR/macos/Frameworks/"*.framework; do
     
     for dep in $deps; do
         dep_name=$(basename "$dep")
+        
         bundle_lib "$dep" "$LIBS_DIR"
         
-        # Patch the framework to point to the bundled lib
-        echo "      Redirecting $dep -> @rpath/$dep_name"
-        install_name_tool -change "$dep" "@rpath/$dep_name" "$binary"
+        # If bundling failed (file not found), we can't use @rpath.
+        if [ ! -f "$LIBS_DIR/$dep_name" ]; then
+             # Fallback: Redirect to system path (e.g. /usr/lib/libz.1.dylib)
+             SYSTEM_PATH="/usr/lib/$dep_name"
+             echo "      ⚠️  Failed to bundle $dep_name. Redirecting to system path: $SYSTEM_PATH"
+             install_name_tool -change "$dep" "$SYSTEM_PATH" "$binary"
+        else
+             # Patch the framework to point to the bundled lib
+             echo "      Redirecting $dep -> @rpath/$dep_name"
+             install_name_tool -change "$dep" "@rpath/$dep_name" "$binary"
+        fi
     done
 done
 
-# 4. Patch Podspec to include bundled libraries
-PODSPEC="$PACKAGE_DIR/macos/ffmpeg_kit_flutter_new_full.podspec"
-if [ -f "$PODSPEC" ]; then
-    if ! grep -q "vendored_libraries" "$PODSPEC"; then
-        echo "📝 Patching podspec to include bundled libs..."
-        # Insert vendored_libraries after vendored_frameworks line
-        # We use a safe sed pattern
-        sed -i '' '/vendored_frameworks/a\
-    ss.osx.vendored_libraries = "libs/*.dylib"' "$PODSPEC"
-    else
-        echo "✅ Podspec already patched."
-    fi
+# 4. Copy bundled libs to project and update Xcode project
+echo "📂 Copying bundled libs to macos/Runner/Frameworks..."
+PROJECT_FRAMEWORKS_DIR="macos/Runner/Frameworks"
+mkdir -p "$PROJECT_FRAMEWORKS_DIR"
+
+# Check if there are any dylibs to copy
+if ls "$LIBS_DIR/"*.dylib 1> /dev/null 2>&1; then
+    cp "$LIBS_DIR/"*.dylib "$PROJECT_FRAMEWORKS_DIR/"
 else
-    echo "⚠️  Podspec not found at $PODSPEC"
+    echo "⚠️  No bundled libraries found in $LIBS_DIR. Skipping copy."
 fi
+
+echo "📝 Updating Xcode project to embed libraries..."
+
+# Create Ruby script to update Xcode project
+cat <<EOF > scripts/update_xcode.rb
+require 'xcodeproj'
+
+project_path = 'macos/Runner.xcodeproj'
+project = Xcodeproj::Project.open(project_path)
+target = project.targets.find { |t| t.name == 'Runner' }
+group = project.main_group['Frameworks'] || project.main_group.new_group('Frameworks')
+
+# Ensure "Embed Frameworks" phase exists
+embed_phase = target.copy_files_build_phases.find { |p| p.name == 'Embed Frameworks' || p.dst_subfolder_spec == 10 }
+if embed_phase.nil?
+  embed_phase = target.new_copy_files_build_phase('Embed Frameworks')
+  embed_phase.dst_subfolder_spec = "10" # Frameworks
+end
+
+# Clean up existing file references from the Frameworks group
+# This removes them from the project and ALL build phases, ensuring a clean slate.
+puts "Cleaning existing file references from Frameworks group..."
+group.files.to_a.each do |file_ref|
+  if file_ref.path && file_ref.path.end_with?('.dylib')
+    puts "   Removing reference #{file_ref.path}"
+    file_ref.remove_from_project
+  end
+end
+
+Dir.glob('$PROJECT_FRAMEWORKS_DIR/*.dylib').each do |file|
+  filename = File.basename(file)
+  puts "Processing #{filename}..."
+  
+  # Calculate path relative to the Xcode project (which is in macos/)
+  relative_path = file.sub(/^macos\//, '')
+  
+  # Add file to project (new reference)
+  file_ref = group.new_reference(relative_path)
+  
+  # Add to Embed phase
+  build_file = embed_phase.add_file_reference(file_ref)
+  build_file.settings = { 'ATTRIBUTES' => ['CodeSignOnCopy', 'RemoveHeadersOnCopy'] }
+  puts "   Added to Embed Frameworks"
+end
+
+project.save
+puts "Xcode project updated."
+EOF
+
+# Run Ruby script
+ruby scripts/update_xcode.rb
+rm scripts/update_xcode.rb
+
+# 5. Force Pod Install
+# We delete Podfile.lock to ensure pod install runs and picks up the new frameworks/headers
+echo "🔄 Forcing pod install update..."
+rm -f macos/Podfile.lock
+# We don't run pod install here because flutter build macos will do it.
+# But deleting the lockfile ensures it runs.
 
 echo "✅ Fix script completed."
