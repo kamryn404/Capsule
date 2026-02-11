@@ -3,8 +3,8 @@ name: Release
 on:
   push:
     tags:
-      - 'v[0-9]+.[0-9]+' # Triggers on version tags like v0.5, v1.0, v1.1
-      - 'v[0-9]+.[0-9]+.0' # Also triggers on v0.5.0, v1.0.0, v1.1.0 (not patch releases like v1.0.1)
+      - "v[0-9]+.[0-9]+" # Triggers on version tags like v0.5, v1.0, v1.1
+      - "v[0-9]+.[0-9]+.0" # Also triggers on v0.5.0, v1.0.0, v1.1.0 (not patch releases like v1.0.1)
   workflow_dispatch: # Allows manual triggering
 
 jobs:
@@ -12,35 +12,35 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          channel: 'master'
+          channel: "master"
           cache: true
-      
+
       - name: Install dependencies
         run: flutter pub get
-      
+
       - name: Patch FFmpeg frameworks to use system libraries
         run: |
           # The ffmpeg_kit_flutter_new_full package has pre-built frameworks with
           # hardcoded Homebrew library paths. Patch them to use system libraries
           # so the app doesn't require end users to install Homebrew.
           bash scripts/fix_ffmpeg_macos.sh
-      
+
       - name: Install fastforge
         run: dart pub global activate fastforge
-      
+
       - name: Install appdmg
         run: npm install -g appdmg
-      
+
       - name: Clean dist folder
         run: rm -rf dist/
-      
+
       - name: Build macOS DMG
         run: fastforge release --name release --jobs macos-dmg
-      
+
       - name: Upload macOS artifact
         uses: actions/upload-artifact@v4
         with:
@@ -51,26 +51,26 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          channel: 'master'
+          channel: "master"
           cache: true
-      
+
       - name: Install dependencies
         run: flutter pub get
-      
+
       - name: Install fastforge
         run: dart pub global activate fastforge
-      
+
       - name: Clean dist folder
         run: Remove-Item -Recurse -Force dist -ErrorAction SilentlyContinue
         shell: pwsh
-      
+
       - name: Build Windows EXE
         run: fastforge release --name release --jobs windows-exe
-      
+
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
         with:
@@ -81,7 +81,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Install Linux dependencies
         run: |
           sudo apt-get update
@@ -103,28 +103,28 @@ jobs:
           sudo apt-get install -y libsecret-1-dev libjsoncpp-dev
           # AppImage dependencies
           sudo apt-get install -y libfuse2 appstream
-      
+
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          channel: 'master'
+          channel: "master"
           cache: true
-      
+
       - name: Install dependencies
         run: flutter pub get
-      
+
       - name: Install appimagetool
         run: |
           wget -O appimagetool https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
           chmod +x appimagetool
           sudo mv appimagetool /usr/local/bin/
-      
+
       - name: Clean dist and build folders
         run: rm -rf dist/ build/
-      
+
       - name: Build Linux AppImage
         run: dart run fastforge:main release --name release --jobs linux-appimage
-      
+
       - name: Upload Linux artifact
         uses: actions/upload-artifact@v4
         with:
@@ -141,50 +141,57 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: artifacts
-      
+
       - name: Display structure of downloaded files
         run: ls -R artifacts
-      
-      - name: Get version from tag
+
+      - name: Get version
         id: version
         run: |
-          # Extract version from tag (e.g., v0.5.0 -> 0.5.0, v0.5 -> 0.5)
-          VERSION="${GITHUB_REF_NAME#v}"
+          if [[ "${{ github.ref_type }}" == "tag" ]]; then
+            # Extract version from tag (e.g., v0.5.0 -> 0.5.0)
+            VERSION="${GITHUB_REF_NAME#v}"
+          else
+            # Fallback for manual triggers or non-tag pushes
+            VERSION="manual-$(date +'%Y%m%d-%H%M%S')"
+          fi
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Version: $VERSION"
-      
+
       - name: Rename artifacts to match version
         run: |
           VERSION="${{ steps.version.outputs.version }}"
           mkdir -p release_files
-          
+
           # Rename macOS DMG
           for f in artifacts/**/*.dmg; do
             if [ -f "$f" ]; then
               cp "$f" "release_files/Capsule-v${VERSION}-macos.dmg"
             fi
           done
-          
+
           # Rename Windows EXE
           for f in artifacts/**/*.exe; do
             if [ -f "$f" ]; then
               cp "$f" "release_files/Capsule-v${VERSION}-windows.exe"
             fi
           done
-          
+
           # Rename Linux AppImage
           for f in artifacts/**/*.AppImage; do
             if [ -f "$f" ]; then
               cp "$f" "release_files/Capsule-v${VERSION}-linux.AppImage"
             fi
           done
-          
+
           ls -la release_files/
-      
+
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           files: release_files/*
+          tag_name: v${{ steps.version.outputs.version }}
+          name: Release v${{ steps.version.outputs.version }}
           generate_release_notes: true
           draft: false
           prerelease: false
