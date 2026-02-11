@@ -141,6 +141,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: artifacts
+          merge-multiple: true
 
       - name: Display structure of downloaded files
         run: ls -R artifacts
@@ -164,21 +165,21 @@ jobs:
           mkdir -p release_files
 
           # Rename macOS DMG
-          for f in artifacts/**/*.dmg; do
+          for f in artifacts/*.dmg; do
             if [ -f "$f" ]; then
               cp "$f" "release_files/Capsule-v${VERSION}-macos.dmg"
             fi
           done
 
           # Rename Windows EXE
-          for f in artifacts/**/*.exe; do
+          for f in artifacts/*.exe; do
             if [ -f "$f" ]; then
               cp "$f" "release_files/Capsule-v${VERSION}-windows.exe"
             fi
           done
 
           # Rename Linux AppImage
-          for f in artifacts/**/*.AppImage; do
+          for f in artifacts/*.AppImage; do
             if [ -f "$f" ]; then
               cp "$f" "release_files/Capsule-v${VERSION}-linux.AppImage"
             fi
@@ -190,6 +191,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: release_files/*
+          fail_on_unmatched_files: true
           tag_name: v${{ steps.version.outputs.version }}
           name: Release v${{ steps.version.outputs.version }}
           generate_release_notes: true
