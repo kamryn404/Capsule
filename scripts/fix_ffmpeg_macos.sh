@@ -272,14 +272,22 @@ group = project.main_group['Frameworks'] || project.main_group.new_group('Framew
 # We also use -Wl,-ld_classic to use the older linker which is more lenient with duplicates.
 puts "Adding linker flags to Runner target..."
 target.build_configurations.each do |config|
-  ldflags = config.build_settings['OTHER_LDFLAGS'] || '$(inherited)'
-  %w[-Wl,-no_warn_duplicate_libraries -Wl,-ld_classic].each do |flag|
-    unless ldflags.include?(flag)
-      ldflags = "#{ldflags} #{flag}"
-      puts "   Added #{flag} to #{config.name} configuration"
+  config.build_settings['OTHER_LDFLAGS'] ||= '$(inherited)'
+  flags = config.build_settings['OTHER_LDFLAGS']
+  ['-Wl,-no_warn_duplicate_libraries', '-Wl,-ld_classic'].each do |flag|
+    if flags.is_a?(String)
+      unless flags.include?(flag)
+        flags = "#{flags} #{flag}"
+        puts "   Added #{flag} to #{config.name} configuration"
+      end
+    elsif flags.is_a?(Array)
+      unless flags.include?(flag)
+        flags << flag
+        puts "   Added #{flag} to #{config.name} configuration"
+      end
     end
   end
-  config.build_settings['OTHER_LDFLAGS'] = ldflags
+  config.build_settings['OTHER_LDFLAGS'] = flags
 end
 
 # Ensure "Embed Frameworks" phase exists
