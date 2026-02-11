@@ -41,10 +41,13 @@ post_install do |installer|
     
     # Add linker flag to suppress duplicate dylib warnings from FFmpeg frameworks
     # The pre-built FFmpeg frameworks have duplicate load commands that can't be removed
+    # We also use -Wl,-ld_classic to use the older linker which is more lenient with duplicates
     target.build_configurations.each do |config|
       config.build_settings['OTHER_LDFLAGS'] ||= '$(inherited)'
-      unless config.build_settings['OTHER_LDFLAGS'].include?('-Wl,-no_warn_duplicate_libraries')
-        config.build_settings['OTHER_LDFLAGS'] = "#{config.build_settings['OTHER_LDFLAGS']} -Wl,-no_warn_duplicate_libraries"
+      %w[-Wl,-no_warn_duplicate_libraries -Wl,-ld_classic].each do |flag|
+        unless config.build_settings['OTHER_LDFLAGS'].include?(flag)
+          config.build_settings['OTHER_LDFLAGS'] = "#{config.build_settings['OTHER_LDFLAGS']} #{flag}"
+        end
       end
     end
   end
@@ -58,11 +61,15 @@ post_install do |installer|
           # Add linker flag to suppress duplicate dylib errors from FFmpeg frameworks
           # The pre-built FFmpeg frameworks have duplicate LC_LOAD_DYLIB entries for libiconv
           # that cannot be removed with install_name_tool
+          # We also use -Wl,-ld_classic to use the older linker which is more lenient with duplicates
           user_target.build_configurations.each do |config|
             ldflags = config.build_settings['OTHER_LDFLAGS'] || '$(inherited)'
-            unless ldflags.include?('-Wl,-no_warn_duplicate_libraries')
-              config.build_settings['OTHER_LDFLAGS'] = "#{ldflags} -Wl,-no_warn_duplicate_libraries"
+            %w[-Wl,-no_warn_duplicate_libraries -Wl,-ld_classic].each do |flag|
+              unless ldflags.include?(flag)
+                ldflags = "#{ldflags} #{flag}"
+              end
             end
+            config.build_settings['OTHER_LDFLAGS'] = ldflags
           end
 
           # Force copy the custom AppIcon.icns into the build bundle

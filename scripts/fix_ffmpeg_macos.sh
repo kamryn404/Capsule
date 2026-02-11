@@ -136,7 +136,7 @@ find_brew_lib() {
 }
 
 # List of libraries that are safe to use from /usr/lib (system libraries)
-SYSTEM_LIBS="libz.1.dylib libbz2.1.0.dylib liblzma.5.dylib libSystem.B.dylib libc++.1.dylib libobjc.A.dylib"
+SYSTEM_LIBS="libz.1.dylib libbz2.1.0.dylib liblzma.5.dylib libSystem.B.dylib libc++.1.dylib libobjc.A.dylib libiconv.2.dylib libcharset.1.dylib"
 
 is_system_lib() {
     local lib_name="$1"
@@ -191,9 +191,9 @@ bundle_lib() {
 
 echo "📦 Bundling dependencies..."
 
-# Libraries that we bundle - we need to redirect ALL references to these to @rpath
+# Libraries that we bundle - we need to redirect ALL possible paths to @rpath
 # This includes /usr/lib, /opt/homebrew, /usr/local, and any existing @rpath references
-BUNDLED_LIBS="libiconv.2.dylib"
+BUNDLED_LIBS=""
 
 for framework in "$PACKAGE_DIR/macos/Frameworks/"*.framework; do
     binary_name=$(basename "$framework" .framework)
@@ -211,18 +211,6 @@ for framework in "$PACKAGE_DIR/macos/Frameworks/"*.framework; do
     # But the linker still resolves /usr/lib paths correctly
     for sys_lib in $SYSTEM_LIBS; do
         install_name_tool -change "@rpath/$sys_lib" "/usr/lib/$sys_lib" "$binary" 2>/dev/null || true
-    done
-    
-    # For libraries we're bundling, redirect ALL possible paths to @rpath
-    # This handles the case where different architecture slices have different paths
-    for bundled_lib in $BUNDLED_LIBS; do
-        # Redirect /usr/lib path
-        install_name_tool -change "/usr/lib/$bundled_lib" "@rpath/$bundled_lib" "$binary" 2>/dev/null || true
-        # Redirect /usr/lib/libcharset (related to libiconv)
-        install_name_tool -change "/usr/lib/libcharset.1.dylib" "@rpath/libcharset.1.dylib" "$binary" 2>/dev/null || true
-        # Redirect Homebrew paths (both Intel and Apple Silicon)
-        install_name_tool -change "/opt/homebrew/opt/libiconv/lib/$bundled_lib" "@rpath/$bundled_lib" "$binary" 2>/dev/null || true
-        install_name_tool -change "/usr/local/opt/libiconv/lib/$bundled_lib" "@rpath/$bundled_lib" "$binary" 2>/dev/null || true
     done
     
     # Find Homebrew/local dependencies (both /opt/homebrew and /usr/local paths)
@@ -281,13 +269,17 @@ group = project.main_group['Frameworks'] || project.main_group.new_group('Framew
 # The pre-built FFmpeg frameworks have duplicate LC_LOAD_DYLIB entries for libiconv
 # that cannot be removed with install_name_tool. This flag tells the linker to
 # treat duplicate dylibs as warnings instead of errors.
-puts "Adding -no_warn_duplicate_libraries linker flag to Runner target..."
+# We also use -Wl,-ld_classic to use the older linker which is more lenient with duplicates.
+puts "Adding linker flags to Runner target..."
 target.build_configurations.each do |config|
   ldflags = config.build_settings['OTHER_LDFLAGS'] || '$(inherited)'
-  unless ldflags.include?('-Wl,-no_warn_duplicate_libraries')
-    config.build_settings['OTHER_LDFLAGS'] = "#{ldflags} -Wl,-no_warn_duplicate_libraries"
-    puts "   Added to #{config.name} configuration"
+  %w[-Wl,-no_warn_duplicate_libraries -Wl,-ld_classic].each do |flag|
+    unless ldflags.include?(flag)
+      ldflags = "#{ldflags} #{flag}"
+      puts "   Added #{flag} to #{config.name} configuration"
+    end
   end
+  config.build_settings['OTHER_LDFLAGS'] = ldflags
 end
 
 # Ensure "Embed Frameworks" phase exists
