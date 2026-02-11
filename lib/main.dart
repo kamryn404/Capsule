@@ -1,6 +1,6 @@
 import 'dart:io';
-import 'dart:ui';
 
+import 'package:capsule/services/log_service.dart';
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
@@ -19,8 +19,12 @@ import 'widgets/window_buttons.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await logger.init();
+  logger.log(
+    'App started on ${Platform.operatingSystem} ${Platform.operatingSystemVersion}',
+  );
   MediaKit.ensureInitialized();
-  
+
   if (!Platform.isAndroid && !Platform.isIOS) {
     await windowManager.ensureInitialized();
 
@@ -32,7 +36,7 @@ void main() async {
       skipTaskbar: false,
       titleBarStyle: TitleBarStyle.hidden,
     );
-    
+
     windowManager.waitUntilReadyToShow(windowOptions, () async {
       await windowManager.show();
       await windowManager.focus();
@@ -96,7 +100,7 @@ class _MyHomePageState extends State<MyHomePage> {
     setState(() {
       _ffmpegAvailable = available;
     });
-    
+
     if (!available && Platform.isLinux) {
       _detectLinuxDistro();
     }
@@ -107,12 +111,18 @@ class _MyHomePageState extends State<MyHomePage> {
       final file = File('/etc/os-release');
       if (await file.exists()) {
         final content = await file.readAsString();
-        if (content.contains('ID=ubuntu') || content.contains('ID=debian') || content.contains('ID_LIKE=ubuntu') || content.contains('ID_LIKE=debian')) {
-           setState(() => _linuxDistro = 'debian');
-        } else if (content.contains('ID=fedora') || content.contains('ID=rhel') || content.contains('ID=centos')) {
-           setState(() => _linuxDistro = 'redhat');
-        } else if (content.contains('ID=arch') || content.contains('ID_LIKE=arch')) {
-           setState(() => _linuxDistro = 'arch');
+        if (content.contains('ID=ubuntu') ||
+            content.contains('ID=debian') ||
+            content.contains('ID_LIKE=ubuntu') ||
+            content.contains('ID_LIKE=debian')) {
+          setState(() => _linuxDistro = 'debian');
+        } else if (content.contains('ID=fedora') ||
+            content.contains('ID=rhel') ||
+            content.contains('ID=centos')) {
+          setState(() => _linuxDistro = 'redhat');
+        } else if (content.contains('ID=arch') ||
+            content.contains('ID_LIKE=arch')) {
+          setState(() => _linuxDistro = 'arch');
         }
       }
     } catch (e) {
@@ -125,11 +135,46 @@ class _MyHomePageState extends State<MyHomePage> {
     final ext = p.extension(file.path).toLowerCase();
     ffmpeg.MediaType? type;
 
-    if (['.jpg', '.jpeg', '.png', '.webp', '.avif', '.heic', '.bmp', '.tiff', '.tif', '.gif'].contains(ext)) {
+    if ([
+      '.jpg',
+      '.jpeg',
+      '.png',
+      '.webp',
+      '.avif',
+      '.heic',
+      '.bmp',
+      '.tiff',
+      '.tif',
+      '.gif',
+    ].contains(ext)) {
       type = ffmpeg.MediaType.image;
-    } else if (['.mp4', '.webm', '.mkv', '.mov', '.avi', '.flv', '.wmv', '.m4v', '.ts', '.3gp', '.m2ts', '.mts'].contains(ext)) {
+    } else if ([
+      '.mp4',
+      '.webm',
+      '.mkv',
+      '.mov',
+      '.avi',
+      '.flv',
+      '.wmv',
+      '.m4v',
+      '.ts',
+      '.3gp',
+      '.m2ts',
+      '.mts',
+    ].contains(ext)) {
       type = ffmpeg.MediaType.video;
-    } else if (['.mp3', '.aac', '.ogg', '.wav', '.flac', '.m4a', '.opus', '.aiff', '.wma', '.m4b'].contains(ext)) {
+    } else if ([
+      '.mp3',
+      '.aac',
+      '.ogg',
+      '.wav',
+      '.flac',
+      '.m4a',
+      '.opus',
+      '.aiff',
+      '.wma',
+      '.m4b',
+    ].contains(ext)) {
       type = ffmpeg.MediaType.audio;
     }
 
@@ -148,7 +193,7 @@ class _MyHomePageState extends State<MyHomePage> {
 
     try {
       final result = await _ffmpegService.probeFile(file.path);
-      
+
       if (result.isSupported) {
         setState(() {
           _capturedFile = file;
@@ -165,9 +210,9 @@ class _MyHomePageState extends State<MyHomePage> {
     } catch (e) {
       debugPrint('Error probing file: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error checking file: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error checking file: $e')));
       }
     } finally {
       if (mounted) {
@@ -203,7 +248,7 @@ class _MyHomePageState extends State<MyHomePage> {
     // On mobile, native camera usually lets you switch.
     // But ImagePicker has separate methods: pickImage and pickVideo.
     // I'll show a simple dialog or bottom sheet to choose.
-    
+
     await showModalBottomSheet(
       context: context,
       backgroundColor: Colors.grey[900],
@@ -212,10 +257,15 @@ class _MyHomePageState extends State<MyHomePage> {
         children: [
           ListTile(
             leading: const Icon(Icons.camera_alt, color: Colors.white),
-            title: const Text('Take Photo', style: TextStyle(color: Colors.white)),
+            title: const Text(
+              'Take Photo',
+              style: TextStyle(color: Colors.white),
+            ),
             onTap: () async {
               Navigator.pop(context);
-              final XFile? photo = await picker.pickImage(source: ImageSource.camera);
+              final XFile? photo = await picker.pickImage(
+                source: ImageSource.camera,
+              );
               if (photo != null) {
                 setState(() {
                   _capturedFile = photo;
@@ -227,10 +277,15 @@ class _MyHomePageState extends State<MyHomePage> {
           ),
           ListTile(
             leading: const Icon(Icons.videocam, color: Colors.white),
-            title: const Text('Record Video', style: TextStyle(color: Colors.white)),
+            title: const Text(
+              'Record Video',
+              style: TextStyle(color: Colors.white),
+            ),
             onTap: () async {
               Navigator.pop(context);
-              final XFile? video = await picker.pickVideo(source: ImageSource.camera);
+              final XFile? video = await picker.pickVideo(
+                source: ImageSource.camera,
+              );
               if (video != null) {
                 setState(() {
                   _capturedFile = video;
@@ -250,9 +305,7 @@ class _MyHomePageState extends State<MyHomePage> {
     Widget content = Stack(
       children: [
         // Main Content
-        Positioned.fill(
-          child: _buildContent(),
-        ),
+        Positioned.fill(child: _buildContent()),
 
         // Drag Overlay
         if (_dragging)
@@ -291,9 +344,7 @@ class _MyHomePageState extends State<MyHomePage> {
                     onPanStart: (details) {
                       windowManager.startDragging();
                     },
-                    child: Container(
-                      color: Colors.transparent,
-                    ),
+                    child: Container(color: Colors.transparent),
                   ),
                 ),
                 if (Platform.isWindows || Platform.isLinux)
@@ -327,7 +378,7 @@ class _MyHomePageState extends State<MyHomePage> {
           setState(() {
             _dragging = false;
           });
-          
+
           if (detail.files.isNotEmpty) {
             if (detail.files.length == 1) {
               await _handleFile(detail.files.first);
@@ -338,7 +389,7 @@ class _MyHomePageState extends State<MyHomePage> {
               // Let's stick to extension check for batch for performance, or implement batch probing later.
               // The user asked to not reject file extensions.
               // So we should probably probe.
-              
+
               setState(() {
                 _isProbing = true;
               });
@@ -355,19 +406,50 @@ class _MyHomePageState extends State<MyHomePage> {
                   // It might be slow for many files.
                   // Let's just use the first file to determine type, and assume others match?
                   // No, that's dangerous.
-                  
+
                   // Revert to extension check for batch for now, as probing 100 files is bad UX without a progress bar.
                   // But we can expand the list.
                   // Or we can just accept them and fail later?
-                  
+
                   final ext = p.extension(file.path).toLowerCase();
                   ffmpeg.MediaType? fileType;
                   // Expanded list based on common ffmpeg support
-                  if (['.jpg', '.jpeg', '.png', '.webp', '.avif', '.heic', '.bmp', '.tiff', '.gif'].contains(ext)) {
+                  if ([
+                    '.jpg',
+                    '.jpeg',
+                    '.png',
+                    '.webp',
+                    '.avif',
+                    '.heic',
+                    '.bmp',
+                    '.tiff',
+                    '.gif',
+                  ].contains(ext)) {
                     fileType = ffmpeg.MediaType.image;
-                  } else if (['.mp4', '.webm', '.mkv', '.mov', '.avi', '.flv', '.wmv', '.m4v', '.ts', '.3gp'].contains(ext)) {
+                  } else if ([
+                    '.mp4',
+                    '.webm',
+                    '.mkv',
+                    '.mov',
+                    '.avi',
+                    '.flv',
+                    '.wmv',
+                    '.m4v',
+                    '.ts',
+                    '.3gp',
+                  ].contains(ext)) {
                     fileType = ffmpeg.MediaType.video;
-                  } else if (['.mp3', '.aac', '.ogg', '.wav', '.flac', '.m4a', '.opus', '.aiff', '.wma'].contains(ext)) {
+                  } else if ([
+                    '.mp3',
+                    '.aac',
+                    '.ogg',
+                    '.wav',
+                    '.flac',
+                    '.m4a',
+                    '.opus',
+                    '.aiff',
+                    '.wma',
+                  ].contains(ext)) {
                     fileType = ffmpeg.MediaType.audio;
                   }
 
@@ -395,7 +477,11 @@ class _MyHomePageState extends State<MyHomePage> {
                 } else {
                   if (mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Batch must contain only supported files of the same type')),
+                      const SnackBar(
+                        content: Text(
+                          'Batch must contain only supported files of the same type',
+                        ),
+                      ),
                     );
                   }
                 }
@@ -437,7 +523,10 @@ class _MyHomePageState extends State<MyHomePage> {
                   children: [
                     CircularProgressIndicator(),
                     SizedBox(height: 16),
-                    Text('Checking file...', style: TextStyle(color: Colors.white)),
+                    Text(
+                      'Checking file...',
+                      style: TextStyle(color: Colors.white),
+                    ),
                   ],
                 ),
               ),
@@ -502,11 +591,53 @@ class _MyHomePageState extends State<MyHomePage> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            SvgPicture.asset(
-              'assets/capsule.svg',
-              width: 120,
-              height: 120,
-              colorFilter: const ColorFilter.mode(Colors.white, BlendMode.srcIn),
+            GestureDetector(
+              onLongPress: () {
+                showDialog(
+                  context: context,
+                  builder: (context) => AlertDialog(
+                    backgroundColor: Colors.grey[900],
+                    title: const Text(
+                      'App Logs',
+                      style: TextStyle(color: Colors.white),
+                    ),
+                    content: SizedBox(
+                      width: double.maxFinite,
+                      child: SingleChildScrollView(
+                        child: SelectableText(
+                          logger.getLogs(),
+                          style: const TextStyle(
+                            fontFamily: 'monospace',
+                            color: Colors.white70,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => logger.clearLogs().then(
+                          (_) => Navigator.pop(context),
+                        ),
+                        child: const Text('Clear'),
+                      ),
+                      TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: const Text('Close'),
+                      ),
+                    ],
+                  ),
+                );
+              },
+              child: SvgPicture.asset(
+                'assets/capsule.svg',
+                width: 120,
+                height: 120,
+                colorFilter: const ColorFilter.mode(
+                  Colors.white,
+                  BlendMode.srcIn,
+                ),
+              ),
             ),
             const SizedBox(height: 16),
             const Text(
@@ -518,8 +649,7 @@ class _MyHomePageState extends State<MyHomePage> {
               ),
             ),
             const SizedBox(height: 8),
-            if (!_ffmpegAvailable)
-              _buildFfmpegMissingWarning(),
+            if (!_ffmpegAvailable) _buildFfmpegMissingWarning(),
             Text(
               (Platform.isAndroid || Platform.isIOS)
                   ? 'Compress any media file'
@@ -586,7 +716,7 @@ class _MyHomePageState extends State<MyHomePage> {
         command = 'Install ffmpeg via your package manager';
       }
     } else if (Platform.isMacOS) {
-       command = 'brew install ffmpeg';
+      command = 'brew install ffmpeg';
     }
 
     return Container(
@@ -599,9 +729,18 @@ class _MyHomePageState extends State<MyHomePage> {
       ),
       child: Column(
         children: [
-          const Text('FFmpeg not detected', style: TextStyle(color: Colors.amber, fontWeight: FontWeight.bold)),
+          const Text(
+            'FFmpeg not detected',
+            style: TextStyle(color: Colors.amber, fontWeight: FontWeight.bold),
+          ),
           const SizedBox(height: 8),
-          SelectableText(command, style: const TextStyle(fontFamily: 'monospace', color: Colors.white)),
+          SelectableText(
+            command,
+            style: const TextStyle(
+              fontFamily: 'monospace',
+              color: Colors.white,
+            ),
+          ),
         ],
       ),
     );
@@ -653,10 +792,12 @@ class DashedBorderPainter extends CustomPainter {
       ..style = PaintingStyle.stroke;
 
     final Path path = Path();
-    path.addRRect(RRect.fromRectAndRadius(
-      Rect.fromLTWH(0, 0, size.width, size.height),
-      Radius.circular(radius),
-    ));
+    path.addRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(0, 0, size.width, size.height),
+        Radius.circular(radius),
+      ),
+    );
 
     final Path dashPath = Path();
     final double dashWidth = 15.0;

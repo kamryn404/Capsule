@@ -5,6 +5,7 @@ import 'package:ffmpeg_kit_flutter_new_full/ffmpeg_kit.dart';
 import 'package:ffmpeg_kit_flutter_new_full/ffprobe_kit.dart';
 import 'package:ffmpeg_kit_flutter_new_full/return_code.dart';
 import 'package:flutter/foundation.dart';
+import 'services/log_service.dart';
 
 enum MediaType { video, audio, image, unknown }
 
@@ -15,7 +16,12 @@ class MediaInfo {
   final int width;
   final int height;
 
-  MediaInfo({required this.duration, required this.bitrate, this.width = 0, this.height = 0});
+  MediaInfo({
+    required this.duration,
+    required this.bitrate,
+    this.width = 0,
+    this.height = 0,
+  });
 }
 
 class ProbeResult {
@@ -33,7 +39,11 @@ class FfmpegTask {
 }
 
 abstract class FfmpegService {
-  Future<FfmpegTask> execute(String command, {void Function(double progress)? onProgress, Duration? totalDuration});
+  Future<FfmpegTask> execute(
+    String command, {
+    void Function(double progress)? onProgress,
+    Duration? totalDuration,
+  });
   Future<MediaInfo> getMediaInfo(String path);
   Future<ProbeResult> probeFile(String path);
   Future<bool> hasEncoder(String encoderName);
@@ -72,7 +82,11 @@ class MobileFfmpegService implements FfmpegService {
   }
 
   @override
-  Future<FfmpegTask> execute(String command, {void Function(double progress)? onProgress, Duration? totalDuration}) async {
+  Future<FfmpegTask> execute(
+    String command, {
+    void Function(double progress)? onProgress,
+    Duration? totalDuration,
+  }) async {
     // FFmpegKit expects command without "ffmpeg" prefix if using execute()
     // But we are passing full command string often.
     // Actually, execute() takes a string of arguments.
@@ -81,10 +95,10 @@ class MobileFfmpegService implements FfmpegService {
     // The Desktop implementation uses Process.start(binary, args).
     // The args are parsed from the command string.
     // Let's parse args here too to be safe and consistent.
-    
+
     // However, FFmpegKit.execute(String command) takes a single string.
     // If we pass "-y -i input.mp4 output.mp4", it works.
-    
+
     final completer = Completer<void>();
 
     final session = await FFmpegKit.executeAsync(
@@ -95,7 +109,12 @@ class MobileFfmpegService implements FfmpegService {
       },
       (log) {
         // Log callback
-        debugPrint(log.getMessage());
+        final message = log.getMessage();
+        if (message.contains('Error') || message.contains('failed')) {
+          logger.error('FFmpegKit: $message');
+        } else {
+          logger.log('FFmpegKit: $message');
+        }
       },
       (statistics) {
         // Statistics callback
@@ -116,23 +135,23 @@ class MobileFfmpegService implements FfmpegService {
       }
       if (!ReturnCode.isSuccess(returnCode)) {
         final failStackTrace = await session.getFailStackTrace();
-        throw Exception('FFmpeg failed with return code $returnCode. $failStackTrace');
+        final errorMsg =
+            'FFmpeg failed with return code $returnCode. $failStackTrace';
+        logger.error(errorMsg);
+        throw Exception(errorMsg);
       }
     });
 
-    return FfmpegTask(
-      doneFuture,
-      () {
-        FFmpegKit.cancel(session.getSessionId());
-      },
-    );
+    return FfmpegTask(doneFuture, () {
+      FFmpegKit.cancel(session.getSessionId());
+    });
   }
 
   @override
   Future<MediaInfo> getMediaInfo(String path) async {
     final session = await FFprobeKit.getMediaInformation(path);
     final info = session.getMediaInformation();
-    
+
     if (info == null) {
       throw Exception('Failed to get media info');
     }
@@ -173,14 +192,19 @@ class MobileFfmpegService implements FfmpegService {
       }
     }
 
-    return MediaInfo(duration: duration, bitrate: bitrate, width: width, height: height);
+    return MediaInfo(
+      duration: duration,
+      bitrate: bitrate,
+      width: width,
+      height: height,
+    );
   }
 
   @override
   Future<ProbeResult> probeFile(String path) async {
     final session = await FFprobeKit.getMediaInformation(path);
     final info = session.getMediaInformation();
-    
+
     if (info == null) {
       return ProbeResult(type: MediaType.unknown, isSupported: false);
     }
@@ -199,14 +223,14 @@ class MobileFfmpegService implements FfmpegService {
         final props = stream.getAllProperties();
         bool isAttachedPic = false;
         if (props != null && props['disposition'] != null) {
-           final disposition = props['disposition'];
-           if (disposition is Map) {
-             if (disposition['attached_pic'] == 1) {
-               isAttachedPic = true;
-             }
-           }
+          final disposition = props['disposition'];
+          if (disposition is Map) {
+            if (disposition['attached_pic'] == 1) {
+              isAttachedPic = true;
+            }
+          }
         }
-        
+
         if (!isAttachedPic) {
           hasVideo = true;
         }
@@ -222,8 +246,12 @@ class MobileFfmpegService implements FfmpegService {
       // Actually, images are often detected as video streams with 1 frame.
       // Let's check format name.
       final format = info.getFormat();
-      if (format != null && (format.contains('image') || format.contains('png') || format.contains('jpeg') || format.contains('webp'))) {
-         return ProbeResult(type: MediaType.image, isSupported: true);
+      if (format != null &&
+          (format.contains('image') ||
+              format.contains('png') ||
+              format.contains('jpeg') ||
+              format.contains('webp'))) {
+        return ProbeResult(type: MediaType.image, isSupported: true);
       }
       return ProbeResult(type: MediaType.video, isSupported: true);
     } else if (hasAudio) {
@@ -277,82 +305,101 @@ class DesktopFfmpegService implements FfmpegService {
 
     // Check if system ffmpeg is available
     try {
-      final result = await Process.run(
-        Platform.isWindows ? 'where' : 'which',
-        ['ffmpeg'],
-      );
-      
+      logger.log('PATH: ${Platform.environment['PATH']}');
+      final result = await Process.run(Platform.isWindows ? 'where' : 'which', [
+        'ffmpeg',
+      ]);
+
       if (result.exitCode == 0) {
         final systemPath = result.stdout.toString().trim().split('\n').first;
         if (systemPath.isNotEmpty) {
           _binaryPath = systemPath;
           _isSystemFfmpeg = true;
-          debugPrint('Using system FFmpeg at $_binaryPath');
+          logger.log('Using system FFmpeg at $_binaryPath');
           return;
         }
       }
     } catch (e) {
-      debugPrint('Error checking for system ffmpeg: $e');
+      logger.error('Error checking for system ffmpeg', e);
     }
 
-    debugPrint('System FFmpeg not found');
+    logger.log('System FFmpeg not found');
   }
 
   @override
-  Future<FfmpegTask> execute(String command, {void Function(double progress)? onProgress, Duration? totalDuration}) async {
+  Future<FfmpegTask> execute(
+    String command, {
+    void Function(double progress)? onProgress,
+    Duration? totalDuration,
+  }) async {
     if (_binaryPath == null) {
       await init();
     }
-    
+
     if (_binaryPath == null) {
       throw Exception('FFmpeg not available');
     }
 
     final args = _parseArgs(command);
-    
+
     // Add -nostdin to prevent hanging if ffmpeg waits for input
     if (!args.contains('-nostdin')) {
       args.insert(0, '-nostdin');
     }
-    
-    debugPrint('Executing: $_binaryPath ${args.join(' ')}');
+
+    logger.log('Executing: $_binaryPath ${args.join(' ')}');
 
     final process = await Process.start(_binaryPath!, args);
     bool isCancelled = false;
+    final List<String> errorOutput = [];
 
     // Listen to stderr for progress (FFmpeg writes stats to stderr)
-    process.stderr.transform(const Utf8Decoder(allowMalformed: true)).listen((data) {
-      // debugPrint('FFmpeg stderr: $data'); // Too verbose for rapid updates
-      if (onProgress != null && totalDuration != null) {
-        _parseProgress(data, totalDuration, onProgress);
-      }
-    }, onError: (e) {
-      debugPrint('FFmpeg stderr error: $e');
-    });
+    process.stderr
+        .transform(const Utf8Decoder(allowMalformed: true))
+        .listen(
+          (data) {
+            // FFmpeg writes almost everything to stderr, including progress and errors
+            if (data.contains('Error') || data.contains('failed')) {
+              errorOutput.add(data);
+            }
+
+            if (onProgress != null && totalDuration != null) {
+              _parseProgress(data, totalDuration, onProgress);
+            }
+          },
+          onError: (e) {
+            logger.error('FFmpeg stderr error', e);
+          },
+        );
 
     // Also listen to stdout just in case
-    process.stdout.transform(const Utf8Decoder(allowMalformed: true)).listen((data) {
-      debugPrint('FFmpeg stdout: $data');
-    }, onError: (e) {
-      debugPrint('FFmpeg stdout error: $e');
-    });
+    process.stdout
+        .transform(const Utf8Decoder(allowMalformed: true))
+        .listen(
+          (data) {
+            logger.log('FFmpeg stdout: $data');
+          },
+          onError: (e) {
+            logger.error('FFmpeg stdout error', e);
+          },
+        );
 
     final doneFuture = process.exitCode.then((exitCode) {
       if (isCancelled) {
         throw Exception('FFmpeg cancelled');
       }
       if (exitCode != 0) {
-        throw Exception('FFmpeg failed with exit code $exitCode');
+        final errorMsg =
+            'FFmpeg failed with exit code $exitCode\n${errorOutput.join('\n')}';
+        logger.error(errorMsg);
+        throw Exception(errorMsg);
       }
     });
 
-    return FfmpegTask(
-      doneFuture,
-      () {
-        isCancelled = true;
-        process.kill();
-      },
-    );
+    return FfmpegTask(doneFuture, () {
+      isCancelled = true;
+      process.kill();
+    });
   }
 
   @override
@@ -363,10 +410,10 @@ class DesktopFfmpegService implements FfmpegService {
 
     // Run ffmpeg -i input
     final result = await Process.run(_binaryPath!, ['-i', path]);
-    
+
     // Parse stderr (ffmpeg outputs info to stderr)
     final output = result.stderr.toString();
-    
+
     // Parse Duration
     // Duration: 00:00:05.00
     final durationRegex = RegExp(r'Duration: (\d+):(\d+):(\d+\.\d+)');
@@ -404,7 +451,12 @@ class DesktopFfmpegService implements FfmpegService {
       height = int.parse(resolutionMatch.group(2)!);
     }
 
-    return MediaInfo(duration: duration, bitrate: bitrate, width: width, height: height);
+    return MediaInfo(
+      duration: duration,
+      bitrate: bitrate,
+      width: width,
+      height: height,
+    );
   }
 
   @override
@@ -418,19 +470,20 @@ class DesktopFfmpegService implements FfmpegService {
     // Add -nostdin to prevent hanging if ffmpeg waits for input
     final result = await Process.run(_binaryPath!, ['-nostdin', '-i', path]);
     final output = result.stderr.toString();
-    
+
     debugPrint('Probe output for $path:\n$output');
 
     // Parse output line by line to detect streams and ignore attached pics
     final lines = output.split('\n');
     bool hasVideo = false;
     bool hasAudio = false;
-    
+
     for (final line in lines) {
       if (line.contains('Video:')) {
         // Check if it's an attached picture (cover art)
         // Stream #0:1: Video: mjpeg, ... (attached pic)
-        if (!line.contains('(attached pic)') && !line.contains('attached_pic')) {
+        if (!line.contains('(attached pic)') &&
+            !line.contains('attached_pic')) {
           hasVideo = true;
         }
       }
@@ -438,15 +491,21 @@ class DesktopFfmpegService implements FfmpegService {
         hasAudio = true;
       }
     }
-    
+
     // Check for image formats
     // Input #0, png_pipe, from ...
     // Input #0, image2, from ...
     // Input #0, mjpeg, from ...
-    bool isImage = output.contains('image2') || output.contains('png_pipe') || output.contains('jpeg_pipe') || output.contains('bmp_pipe') || output.contains('tiff_pipe') || output.contains('webp_pipe');
-    
+    bool isImage =
+        output.contains('image2') ||
+        output.contains('png_pipe') ||
+        output.contains('jpeg_pipe') ||
+        output.contains('bmp_pipe') ||
+        output.contains('tiff_pipe') ||
+        output.contains('webp_pipe');
+
     if (isImage) {
-       return ProbeResult(type: MediaType.image, isSupported: true);
+      return ProbeResult(type: MediaType.image, isSupported: true);
     }
 
     if (hasVideo) {
@@ -458,8 +517,8 @@ class DesktopFfmpegService implements FfmpegService {
     // If ffmpeg recognized the format but no streams?
     // "Input #0, ..."
     if (output.contains('Input #0')) {
-       // Recognized but maybe no streams or unknown
-       return ProbeResult(type: MediaType.unknown, isSupported: true);
+      // Recognized but maybe no streams or unknown
+      return ProbeResult(type: MediaType.unknown, isSupported: true);
     }
 
     return ProbeResult(type: MediaType.unknown, isSupported: false);
@@ -474,9 +533,9 @@ class DesktopFfmpegService implements FfmpegService {
     // Run ffmpeg -encoders
     final result = await Process.run(_binaryPath!, ['-encoders']);
     final output = result.stdout.toString();
-    
+
     debugPrint('Available encoders check for $encoderName');
-    
+
     return output.contains(encoderName);
   }
 
@@ -487,9 +546,12 @@ class DesktopFfmpegService implements FfmpegService {
     }
 
     // Run ffmpeg -h encoder=name
-    final result = await Process.run(_binaryPath!, ['-h', 'encoder=$encoderName']);
+    final result = await Process.run(_binaryPath!, [
+      '-h',
+      'encoder=$encoderName',
+    ]);
     final output = result.stdout.toString();
-    
+
     // Look for "Supported pixel formats: ... pixelFormat ..."
     // Regex to find the line
     final regex = RegExp(r'Supported pixel formats:.*');
@@ -501,7 +563,11 @@ class DesktopFfmpegService implements FfmpegService {
     return false;
   }
 
-  void _parseProgress(String data, Duration totalDuration, void Function(double) onProgress) {
+  void _parseProgress(
+    String data,
+    Duration totalDuration,
+    void Function(double) onProgress,
+  ) {
     // Look for time=HH:MM:SS.mm
     final regex = RegExp(r'time=(\d+):(\d+):(\d+\.\d+)');
     final match = regex.firstMatch(data);
@@ -510,14 +576,15 @@ class DesktopFfmpegService implements FfmpegService {
         final hours = int.parse(match.group(1)!);
         final minutes = int.parse(match.group(2)!);
         final seconds = double.parse(match.group(3)!);
-        
+
         final currentDuration = Duration(
           hours: hours,
           minutes: minutes,
           milliseconds: (seconds * 1000).round(),
         );
 
-        final progress = currentDuration.inMilliseconds / totalDuration.inMilliseconds;
+        final progress =
+            currentDuration.inMilliseconds / totalDuration.inMilliseconds;
         onProgress(progress.clamp(0.0, 1.0));
       } catch (e) {
         // Ignore parsing errors
@@ -546,8 +613,12 @@ class MacosHybridFfmpegService implements FfmpegService {
   Future<void> init() async {
     await _desktopService.init();
     if (await _desktopService.isAvailable()) {
+      logger.log('MacosHybridFfmpegService: Using DesktopFfmpegService');
       _activeService = _desktopService;
     } else {
+      logger.log(
+        'MacosHybridFfmpegService: Using MobileFfmpegService (FFmpegKit)',
+      );
       _activeService = _mobileService;
       await _mobileService.init();
     }
@@ -561,9 +632,17 @@ class MacosHybridFfmpegService implements FfmpegService {
   }
 
   @override
-  Future<FfmpegTask> execute(String command, {void Function(double progress)? onProgress, Duration? totalDuration}) async {
+  Future<FfmpegTask> execute(
+    String command, {
+    void Function(double progress)? onProgress,
+    Duration? totalDuration,
+  }) async {
     final service = await _getService();
-    return service.execute(command, onProgress: onProgress, totalDuration: totalDuration);
+    return service.execute(
+      command,
+      onProgress: onProgress,
+      totalDuration: totalDuration,
+    );
   }
 
   @override
