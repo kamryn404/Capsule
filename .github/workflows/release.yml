@@ -131,6 +131,15 @@ jobs:
           name: linux-appimage
           path: dist/**/*.AppImage
 
+      - name: Build Linux DEB
+        run: dart run fastforge:main release --name release --jobs linux-deb
+
+      - name: Upload Linux DEB artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-deb
+          path: dist/**/*.deb
+
   release:
     needs: [build-macos, build-windows, build-linux]
     runs-on: ubuntu-latest
@@ -172,6 +181,9 @@ jobs:
 
           # Rename Linux AppImage
           find artifacts -name "*.AppImage" -type f -exec cp {} "release_files/Capsule-v${VERSION}-linux.AppImage" \;
+
+          # Rename Linux DEB
+          find artifacts -name "*.deb" -type f -exec cp {} "release_files/Capsule-v${VERSION}-linux.deb" \;
 
           ls -la release_files/
 
