@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:ui';
 
 import 'package:capsule/services/log_service.dart';
 import 'package:desktop_drop/desktop_drop.dart';
@@ -801,16 +802,16 @@ class DashedBorderPainter extends CustomPainter {
 
     final Path dashPath = Path();
     final double dashWidth = 15.0;
-    final double dashSpace = gap;
-    double distance = 0.0;
+    final double dashGap = gap;
 
-    for (final PathMetric metric in path.computeMetrics()) {
+    for (final metric in path.computeMetrics()) {
+      double distance = 0.0;
       while (distance < metric.length) {
         dashPath.addPath(
           metric.extractPath(distance, distance + dashWidth),
           Offset.zero,
         );
-        distance += dashWidth + dashSpace;
+        distance += dashWidth + dashGap;
       }
     }
     canvas.drawPath(dashPath, paint);
