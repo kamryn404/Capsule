@@ -49,12 +49,24 @@ post_install do |installer|
     end
   end
 
-  # Force copy the custom AppIcon.icns into the build bundle
-  # This bypasses the Asset Catalog compiler which often causes the "tiny icon" bug
+  # Apply linker flags and build phases to the Runner target itself
+  # (not just Pod targets - the Runner is what links the FFmpeg frameworks)
   installer.aggregate_targets.each do |target|
     if target.name == 'Pods-Runner'
       target.user_project.targets.each do |user_target|
         if user_target.name == 'Runner'
+          # Add linker flag to suppress duplicate dylib errors from FFmpeg frameworks
+          # The pre-built FFmpeg frameworks have duplicate LC_LOAD_DYLIB entries for libiconv
+          # that cannot be removed with install_name_tool
+          user_target.build_configurations.each do |config|
+            ldflags = config.build_settings['OTHER_LDFLAGS'] || '$(inherited)'
+            unless ldflags.include?('-Wl,-no_warn_duplicate_libraries')
+              config.build_settings['OTHER_LDFLAGS'] = "#{ldflags} -Wl,-no_warn_duplicate_libraries"
+            end
+          end
+
+          # Force copy the custom AppIcon.icns into the build bundle
+          # This bypasses the Asset Catalog compiler which often causes the "tiny icon" bug
           phase_name = 'Force Copy AppIcon'
           existing_phase = user_target.shell_script_build_phases.find { |p| p.name == phase_name }
           unless existing_phase

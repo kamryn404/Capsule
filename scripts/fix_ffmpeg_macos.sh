@@ -277,6 +277,19 @@ project = Xcodeproj::Project.open(project_path)
 target = project.targets.find { |t| t.name == 'Runner' }
 group = project.main_group['Frameworks'] || project.main_group.new_group('Frameworks')
 
+# Add linker flag to suppress duplicate dylib errors from FFmpeg frameworks
+# The pre-built FFmpeg frameworks have duplicate LC_LOAD_DYLIB entries for libiconv
+# that cannot be removed with install_name_tool. This flag tells the linker to
+# treat duplicate dylibs as warnings instead of errors.
+puts "Adding -no_warn_duplicate_libraries linker flag to Runner target..."
+target.build_configurations.each do |config|
+  ldflags = config.build_settings['OTHER_LDFLAGS'] || '$(inherited)'
+  unless ldflags.include?('-Wl,-no_warn_duplicate_libraries')
+    config.build_settings['OTHER_LDFLAGS'] = "#{ldflags} -Wl,-no_warn_duplicate_libraries"
+    puts "   Added to #{config.name} configuration"
+  end
+end
+
 # Ensure "Embed Frameworks" phase exists
 embed_phase = target.copy_files_build_phases.find { |p| p.name == 'Embed Frameworks' || p.dst_subfolder_spec == 10 }
 if embed_phase.nil?

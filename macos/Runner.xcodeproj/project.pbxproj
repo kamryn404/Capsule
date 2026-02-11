@@ -21,26 +21,26 @@
 /* End PBXAggregateTarget section */
 
 /* Begin PBXBuildFile section */
-		02D805734E89B3600F28E94A /* libfontconfig.1.dylib in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 2C55DBC2C2A52BF0317ACE6A /* libfontconfig.1.dylib */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
-		0FBCEA3B301784F135A73BA0 /* libfribidi.0.dylib in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = D55AEC0AC6112DDDEE73549C /* libfribidi.0.dylib */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
-		1CAF758E22ABE656EF46AC27 /* libharfbuzz.0.dylib in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 135B6D83A747B3A86F19DD24 /* libharfbuzz.0.dylib */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
-		1DC5611E6508754065F3D10A /* libcrypto.3.dylib in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = CDC94B667C3B36A606515B61 /* libcrypto.3.dylib */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
-		26CA90811090BE4926DE09ED /* libpcre2-8.0.dylib in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 8136EB4BE0291631932EA77D /* libpcre2-8.0.dylib */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		0F3CEDB4FD04A9B0CC490821 /* libfribidi.0.dylib in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = A538578C81A9ABFBF0529F90 /* libfribidi.0.dylib */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		15EEEE16BFBE855327983A39 /* libintl.8.dylib in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 13A773B232A30773C3778357 /* libintl.8.dylib */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		1FC390B931FDE560393575C7 /* libfreetype.6.dylib in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 43274B1AD7AC42D2E04B89AC /* libfreetype.6.dylib */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		331C80D8294CF71000263BE5 /* RunnerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 331C80D7294CF71000263BE5 /* RunnerTests.swift */; };
 		335BBD1B22A9A15E00E9071D /* GeneratedPluginRegistrant.swift in Sources */ = {isa = PBXBuildFile; fileRef = 335BBD1A22A9A15E00E9071D /* GeneratedPluginRegistrant.swift */; };
 		33CC10F12044A3C60003C045 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33CC10F02044A3C60003C045 /* AppDelegate.swift */; };
 		33CC10F32044A3C60003C045 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 33CC10F22044A3C60003C045 /* Assets.xcassets */; };
 		33CC10F62044A3C60003C045 /* MainMenu.xib in Resources */ = {isa = PBXBuildFile; fileRef = 33CC10F42044A3C60003C045 /* MainMenu.xib */; };
 		33CC11132044BFA00003C045 /* MainFlutterWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33CC11122044BFA00003C045 /* MainFlutterWindow.swift */; };
-		8D206D6E5E22459AACE8BA3D /* libfreetype.6.dylib in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 5F56904B88FBF815822BBB34 /* libfreetype.6.dylib */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		38668BE428D4C72670DCFC75 /* libcrypto.3.dylib in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 222920B20DDA4C23B9F52891 /* libcrypto.3.dylib */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		5D4235FF015ACEF702F36804 /* libssl.3.dylib in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = DE15438918F2B6ACD1575EC9 /* libssl.3.dylib */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		6E2B64CA39D2675F2DEF0F65 /* libsrt.1.5.dylib in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 51DFA641BE96B349CD61F6C0 /* libsrt.1.5.dylib */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		799B4F45AC9103CB8A3693B6 /* libpng16.16.dylib in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 661266BDC9CB67D4FA05D0CB /* libpng16.16.dylib */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		92A94C7FF68E2E73E65F0B9D /* Pods_Runner.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 309FE1FD54662F6DDEBE2E12 /* Pods_Runner.framework */; };
-		954A9BB0A2841B97CE8E8B54 /* libiconv.2.dylib in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 688506E501AF90B0A4FE64E2 /* libiconv.2.dylib */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
-		9C276F0DE5F79E8E463FF624 /* libsrt.1.5.dylib in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = AF4B5194F259E926D360008D /* libsrt.1.5.dylib */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
-		BDF12AD26CD7310B0708B366 /* libssl.3.dylib in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = CCA252912B280BA68978585F /* libssl.3.dylib */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
-		BE9B1EC23DED3463A4CFE0AD /* libpng16.16.dylib in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 498DD759ED5CF2CD36BF8D6D /* libpng16.16.dylib */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
-		E883C86B1DB4B11B11B00405 /* libintl.8.dylib in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = D9B0FE71EC982DA58231B057 /* libintl.8.dylib */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
-		EDA6DEA9E2EEA462242111BA /* libglib-2.0.0.dylib in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = C0F405BB896DEB3B57841F9B /* libglib-2.0.0.dylib */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
-		EE1F322DBACE641EE0265AE9 /* libgraphite2.3.dylib in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 63A5202835C7A7F32146346B /* libgraphite2.3.dylib */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		B452B14573BB6BAD1392C152 /* libpcre2-8.0.dylib in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = EAF91F40BA731563E8F96F90 /* libpcre2-8.0.dylib */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		B79F10E43864EF52E943C782 /* libfontconfig.1.dylib in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = D42525601FED8CA833593F47 /* libfontconfig.1.dylib */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		C6EE510B4D457812B4C14AC5 /* libharfbuzz.0.dylib in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 69C3D91F34DA4422B534FE29 /* libharfbuzz.0.dylib */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		C7DE368B8111DEF15CBD62B7 /* libiconv.2.dylib in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 6C8CE38F13262C27BDD81CCE /* libiconv.2.dylib */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		DE4035D9808DA401C78E79C3 /* libglib-2.0.0.dylib in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 7795FA8E7493635496395158 /* libglib-2.0.0.dylib */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		E8354EF2F37BC462413016A9 /* libgraphite2.3.dylib in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 03D66A06C13DAED5C9375752 /* libgraphite2.3.dylib */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		EE2EA43062378039F5B89A18 /* Pods_RunnerTests.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 634430E1CA6B79CC713ACDAC /* Pods_RunnerTests.framework */; };
 /* End PBXBuildFile section */
 
@@ -68,19 +68,19 @@
 			dstPath = "";
 			dstSubfolderSpec = 10;
 			files = (
-				1DC5611E6508754065F3D10A /* libcrypto.3.dylib in Embed Frameworks */,
-				02D805734E89B3600F28E94A /* libfontconfig.1.dylib in Embed Frameworks */,
-				8D206D6E5E22459AACE8BA3D /* libfreetype.6.dylib in Embed Frameworks */,
-				0FBCEA3B301784F135A73BA0 /* libfribidi.0.dylib in Embed Frameworks */,
-				EDA6DEA9E2EEA462242111BA /* libglib-2.0.0.dylib in Embed Frameworks */,
-				EE1F322DBACE641EE0265AE9 /* libgraphite2.3.dylib in Embed Frameworks */,
-				1CAF758E22ABE656EF46AC27 /* libharfbuzz.0.dylib in Embed Frameworks */,
-				954A9BB0A2841B97CE8E8B54 /* libiconv.2.dylib in Embed Frameworks */,
-				E883C86B1DB4B11B11B00405 /* libintl.8.dylib in Embed Frameworks */,
-				26CA90811090BE4926DE09ED /* libpcre2-8.0.dylib in Embed Frameworks */,
-				BE9B1EC23DED3463A4CFE0AD /* libpng16.16.dylib in Embed Frameworks */,
-				9C276F0DE5F79E8E463FF624 /* libsrt.1.5.dylib in Embed Frameworks */,
-				BDF12AD26CD7310B0708B366 /* libssl.3.dylib in Embed Frameworks */,
+				38668BE428D4C72670DCFC75 /* libcrypto.3.dylib in Embed Frameworks */,
+				B79F10E43864EF52E943C782 /* libfontconfig.1.dylib in Embed Frameworks */,
+				1FC390B931FDE560393575C7 /* libfreetype.6.dylib in Embed Frameworks */,
+				0F3CEDB4FD04A9B0CC490821 /* libfribidi.0.dylib in Embed Frameworks */,
+				DE4035D9808DA401C78E79C3 /* libglib-2.0.0.dylib in Embed Frameworks */,
+				E8354EF2F37BC462413016A9 /* libgraphite2.3.dylib in Embed Frameworks */,
+				C6EE510B4D457812B4C14AC5 /* libharfbuzz.0.dylib in Embed Frameworks */,
+				C7DE368B8111DEF15CBD62B7 /* libiconv.2.dylib in Embed Frameworks */,
+				15EEEE16BFBE855327983A39 /* libintl.8.dylib in Embed Frameworks */,
+				B452B14573BB6BAD1392C152 /* libpcre2-8.0.dylib in Embed Frameworks */,
+				799B4F45AC9103CB8A3693B6 /* libpng16.16.dylib in Embed Frameworks */,
+				6E2B64CA39D2675F2DEF0F65 /* libsrt.1.5.dylib in Embed Frameworks */,
+				5D4235FF015ACEF702F36804 /* libssl.3.dylib in Embed Frameworks */,
 			);
 			name = "Embed Frameworks";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -99,8 +99,9 @@
 
 /* Begin PBXFileReference section */
 		020E4C8A95E2262DF7D95AC2 /* Pods-Runner.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Runner.debug.xcconfig"; path = "Target Support Files/Pods-Runner/Pods-Runner.debug.xcconfig"; sourceTree = "<group>"; };
-		135B6D83A747B3A86F19DD24 /* libharfbuzz.0.dylib */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = "compiled.mach-o.dylib"; name = libharfbuzz.0.dylib; path = Runner/Frameworks/libharfbuzz.0.dylib; sourceTree = "<group>"; };
-		2C55DBC2C2A52BF0317ACE6A /* libfontconfig.1.dylib */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = "compiled.mach-o.dylib"; name = libfontconfig.1.dylib; path = Runner/Frameworks/libfontconfig.1.dylib; sourceTree = "<group>"; };
+		03D66A06C13DAED5C9375752 /* libgraphite2.3.dylib */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = "compiled.mach-o.dylib"; name = libgraphite2.3.dylib; path = Runner/Frameworks/libgraphite2.3.dylib; sourceTree = "<group>"; };
+		13A773B232A30773C3778357 /* libintl.8.dylib */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = "compiled.mach-o.dylib"; name = libintl.8.dylib; path = Runner/Frameworks/libintl.8.dylib; sourceTree = "<group>"; };
+		222920B20DDA4C23B9F52891 /* libcrypto.3.dylib */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = "compiled.mach-o.dylib"; name = libcrypto.3.dylib; path = Runner/Frameworks/libcrypto.3.dylib; sourceTree = "<group>"; };
 		309FE1FD54662F6DDEBE2E12 /* Pods_Runner.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_Runner.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		331C80D5294CF71000263BE5 /* RunnerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RunnerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		331C80D7294CF71000263BE5 /* RunnerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunnerTests.swift; sourceTree = "<group>"; };
@@ -118,23 +119,22 @@
 		33E51913231747F40026EE4D /* DebugProfile.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = DebugProfile.entitlements; sourceTree = "<group>"; };
 		33E51914231749380026EE4D /* Release.entitlements */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.entitlements; path = Release.entitlements; sourceTree = "<group>"; };
 		33E5194F232828860026EE4D /* AppInfo.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = AppInfo.xcconfig; sourceTree = "<group>"; };
-		498DD759ED5CF2CD36BF8D6D /* libpng16.16.dylib */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = "compiled.mach-o.dylib"; name = libpng16.16.dylib; path = Runner/Frameworks/libpng16.16.dylib; sourceTree = "<group>"; };
-		5F56904B88FBF815822BBB34 /* libfreetype.6.dylib */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = "compiled.mach-o.dylib"; name = libfreetype.6.dylib; path = Runner/Frameworks/libfreetype.6.dylib; sourceTree = "<group>"; };
+		43274B1AD7AC42D2E04B89AC /* libfreetype.6.dylib */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = "compiled.mach-o.dylib"; name = libfreetype.6.dylib; path = Runner/Frameworks/libfreetype.6.dylib; sourceTree = "<group>"; };
+		51DFA641BE96B349CD61F6C0 /* libsrt.1.5.dylib */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = "compiled.mach-o.dylib"; name = libsrt.1.5.dylib; path = Runner/Frameworks/libsrt.1.5.dylib; sourceTree = "<group>"; };
 		634430E1CA6B79CC713ACDAC /* Pods_RunnerTests.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_RunnerTests.framework; sourceTree = BUILT_PRODUCTS_DIR; };
-		63A5202835C7A7F32146346B /* libgraphite2.3.dylib */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = "compiled.mach-o.dylib"; name = libgraphite2.3.dylib; path = Runner/Frameworks/libgraphite2.3.dylib; sourceTree = "<group>"; };
-		688506E501AF90B0A4FE64E2 /* libiconv.2.dylib */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = "compiled.mach-o.dylib"; name = libiconv.2.dylib; path = Runner/Frameworks/libiconv.2.dylib; sourceTree = "<group>"; };
+		661266BDC9CB67D4FA05D0CB /* libpng16.16.dylib */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = "compiled.mach-o.dylib"; name = libpng16.16.dylib; path = Runner/Frameworks/libpng16.16.dylib; sourceTree = "<group>"; };
+		69C3D91F34DA4422B534FE29 /* libharfbuzz.0.dylib */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = "compiled.mach-o.dylib"; name = libharfbuzz.0.dylib; path = Runner/Frameworks/libharfbuzz.0.dylib; sourceTree = "<group>"; };
+		6C8CE38F13262C27BDD81CCE /* libiconv.2.dylib */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = "compiled.mach-o.dylib"; name = libiconv.2.dylib; path = Runner/Frameworks/libiconv.2.dylib; sourceTree = "<group>"; };
+		7795FA8E7493635496395158 /* libglib-2.0.0.dylib */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = "compiled.mach-o.dylib"; name = "libglib-2.0.0.dylib"; path = "Runner/Frameworks/libglib-2.0.0.dylib"; sourceTree = "<group>"; };
 		78D33ED7A71A69479A8C0E9B /* Pods-RunnerTests.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-RunnerTests.debug.xcconfig"; path = "Target Support Files/Pods-RunnerTests/Pods-RunnerTests.debug.xcconfig"; sourceTree = "<group>"; };
 		7AFA3C8E1D35360C0083082E /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Release.xcconfig; sourceTree = "<group>"; };
-		8136EB4BE0291631932EA77D /* libpcre2-8.0.dylib */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = "compiled.mach-o.dylib"; name = "libpcre2-8.0.dylib"; path = "Runner/Frameworks/libpcre2-8.0.dylib"; sourceTree = "<group>"; };
 		906E4A68CB9B9F2F73B79ECC /* Pods-RunnerTests.profile.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-RunnerTests.profile.xcconfig"; path = "Target Support Files/Pods-RunnerTests/Pods-RunnerTests.profile.xcconfig"; sourceTree = "<group>"; };
 		9740EEB21CF90195004384FC /* Debug.xcconfig */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xcconfig; path = Debug.xcconfig; sourceTree = "<group>"; };
-		AF4B5194F259E926D360008D /* libsrt.1.5.dylib */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = "compiled.mach-o.dylib"; name = libsrt.1.5.dylib; path = Runner/Frameworks/libsrt.1.5.dylib; sourceTree = "<group>"; };
-		C0F405BB896DEB3B57841F9B /* libglib-2.0.0.dylib */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = "compiled.mach-o.dylib"; name = "libglib-2.0.0.dylib"; path = "Runner/Frameworks/libglib-2.0.0.dylib"; sourceTree = "<group>"; };
+		A538578C81A9ABFBF0529F90 /* libfribidi.0.dylib */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = "compiled.mach-o.dylib"; name = libfribidi.0.dylib; path = Runner/Frameworks/libfribidi.0.dylib; sourceTree = "<group>"; };
 		C11A9D5199E5BA81C09FB249 /* Pods-Runner.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Runner.release.xcconfig"; path = "Target Support Files/Pods-Runner/Pods-Runner.release.xcconfig"; sourceTree = "<group>"; };
-		CCA252912B280BA68978585F /* libssl.3.dylib */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = "compiled.mach-o.dylib"; name = libssl.3.dylib; path = Runner/Frameworks/libssl.3.dylib; sourceTree = "<group>"; };
-		CDC94B667C3B36A606515B61 /* libcrypto.3.dylib */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = "compiled.mach-o.dylib"; name = libcrypto.3.dylib; path = Runner/Frameworks/libcrypto.3.dylib; sourceTree = "<group>"; };
-		D55AEC0AC6112DDDEE73549C /* libfribidi.0.dylib */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = "compiled.mach-o.dylib"; name = libfribidi.0.dylib; path = Runner/Frameworks/libfribidi.0.dylib; sourceTree = "<group>"; };
-		D9B0FE71EC982DA58231B057 /* libintl.8.dylib */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = "compiled.mach-o.dylib"; name = libintl.8.dylib; path = Runner/Frameworks/libintl.8.dylib; sourceTree = "<group>"; };
+		D42525601FED8CA833593F47 /* libfontconfig.1.dylib */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = "compiled.mach-o.dylib"; name = libfontconfig.1.dylib; path = Runner/Frameworks/libfontconfig.1.dylib; sourceTree = "<group>"; };
+		DE15438918F2B6ACD1575EC9 /* libssl.3.dylib */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = "compiled.mach-o.dylib"; name = libssl.3.dylib; path = Runner/Frameworks/libssl.3.dylib; sourceTree = "<group>"; };
+		EAF91F40BA731563E8F96F90 /* libpcre2-8.0.dylib */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = "compiled.mach-o.dylib"; name = "libpcre2-8.0.dylib"; path = "Runner/Frameworks/libpcre2-8.0.dylib"; sourceTree = "<group>"; };
 		F827C5DC3C80E13E653426A6 /* Pods-RunnerTests.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-RunnerTests.release.xcconfig"; path = "Target Support Files/Pods-RunnerTests/Pods-RunnerTests.release.xcconfig"; sourceTree = "<group>"; };
 		FF20F482FE835854CC4D55AF /* Pods-Runner.profile.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Runner.profile.xcconfig"; path = "Target Support Files/Pods-Runner/Pods-Runner.profile.xcconfig"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -239,19 +239,19 @@
 			children = (
 				309FE1FD54662F6DDEBE2E12 /* Pods_Runner.framework */,
 				634430E1CA6B79CC713ACDAC /* Pods_RunnerTests.framework */,
-				CDC94B667C3B36A606515B61 /* libcrypto.3.dylib */,
-				2C55DBC2C2A52BF0317ACE6A /* libfontconfig.1.dylib */,
-				5F56904B88FBF815822BBB34 /* libfreetype.6.dylib */,
-				D55AEC0AC6112DDDEE73549C /* libfribidi.0.dylib */,
-				C0F405BB896DEB3B57841F9B /* libglib-2.0.0.dylib */,
-				63A5202835C7A7F32146346B /* libgraphite2.3.dylib */,
-				135B6D83A747B3A86F19DD24 /* libharfbuzz.0.dylib */,
-				688506E501AF90B0A4FE64E2 /* libiconv.2.dylib */,
-				D9B0FE71EC982DA58231B057 /* libintl.8.dylib */,
-				8136EB4BE0291631932EA77D /* libpcre2-8.0.dylib */,
-				498DD759ED5CF2CD36BF8D6D /* libpng16.16.dylib */,
-				AF4B5194F259E926D360008D /* libsrt.1.5.dylib */,
-				CCA252912B280BA68978585F /* libssl.3.dylib */,
+				222920B20DDA4C23B9F52891 /* libcrypto.3.dylib */,
+				D42525601FED8CA833593F47 /* libfontconfig.1.dylib */,
+				43274B1AD7AC42D2E04B89AC /* libfreetype.6.dylib */,
+				A538578C81A9ABFBF0529F90 /* libfribidi.0.dylib */,
+				7795FA8E7493635496395158 /* libglib-2.0.0.dylib */,
+				03D66A06C13DAED5C9375752 /* libgraphite2.3.dylib */,
+				69C3D91F34DA4422B534FE29 /* libharfbuzz.0.dylib */,
+				6C8CE38F13262C27BDD81CCE /* libiconv.2.dylib */,
+				13A773B232A30773C3778357 /* libintl.8.dylib */,
+				EAF91F40BA731563E8F96F90 /* libpcre2-8.0.dylib */,
+				661266BDC9CB67D4FA05D0CB /* libpng16.16.dylib */,
+				51DFA641BE96B349CD61F6C0 /* libsrt.1.5.dylib */,
+				DE15438918F2B6ACD1575EC9 /* libssl.3.dylib */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -661,6 +661,10 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-Wl,-no_warn_duplicate_libraries",
+				);
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_VERSION = 5.0;
 			};
@@ -792,6 +796,10 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-Wl,-no_warn_duplicate_libraries",
+				);
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
@@ -810,6 +818,10 @@
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
+				);
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-Wl,-no_warn_duplicate_libraries",
 				);
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_VERSION = 5.0;
