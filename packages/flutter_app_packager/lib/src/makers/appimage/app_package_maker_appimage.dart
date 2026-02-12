@@ -301,15 +301,21 @@ class AppPackageMakerAppImage extends AppPackageMaker {
           so,
         ]);
 
-        if (result.exitCode != 0) {
+        String? out = result.stdout as String?;
+
+        if (result.exitCode != 0 || out == null || out.trim().isEmpty) {
           // Fallback to a broader search if standard paths fail
           result = await $('find', ['/', '-name', so, '-maxdepth', '4']);
+          out = result.stdout as String?;
         }
 
-        final out = result.stdout.toString();
+        if (out == null || out.trim().isEmpty) {
+          throw MakeError("Can't find specified shared object $so");
+        }
+
         final paths = out
             .split('\n')
-            .where((p) => p.isNotEmpty && !p.contains('/Trash'))
+            .where((p) => p.trim().isNotEmpty && !p.contains('/Trash'))
             .toList();
 
         if (paths.isEmpty) {
