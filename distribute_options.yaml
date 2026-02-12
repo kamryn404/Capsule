@@ -14,7 +14,3 @@ releases:
         package:
           platform: windows
           target: exe
-      - name: linux-deb
-        package:
-          platform: linux
-          target: deb
