@@ -84,7 +84,7 @@ class MakeAppImageConfig extends MakeLinuxPackageConfig {
     final fields = {
       'Name': displayName,
       'GenericName': genericName,
-      'Exec': 'LD_LIBRARY_PATH=usr/lib $appBinaryName %u',
+      'Exec': '$appBinaryName %u',
       'Icon': appBinaryName,
       'Type': 'Application',
       'StartupNotify': startupNotify ? 'true' : 'false',
@@ -102,7 +102,7 @@ class MakeAppImageConfig extends MakeLinuxPackageConfig {
       final fields = {
         'Name': action.name,
         'Exec':
-            'LD_LIBRARY_PATH=usr/lib $appBinaryName ${action.arguments.join(' ')} %u',
+            '$appBinaryName ${action.arguments.join(' ')} %u',
       };
       return '[Desktop Action ${action.label}]\n${fields.entries.map((e) => '${e.key}=${e.value}').join('\n')}';
     }).join('\n\n');
@@ -114,9 +114,19 @@ class MakeAppImageConfig extends MakeLinuxPackageConfig {
     return '''
 #!/bin/bash
 
-cd "\$(dirname "\$0")"
-export LD_LIBRARY_PATH=usr/lib
-exec ./$appName
+# Get the directory where the AppRun script is located
+SELF=\$(readlink -f "\$0")
+HERE=\$(dirname "\$SELF")
+
+# Set up environment variables to prioritize bundled libraries
+# but preserve the system paths so system binaries like ffmpeg can be found.
+export LD_LIBRARY_PATH="\$HERE/usr/lib:\$HERE/lib:\$LD_LIBRARY_PATH"
+
+# Ensure the app runs from its own directory
+cd "\$HERE"
+
+# Execute the application, passing through all arguments
+exec "./$appName" "\$@"
 ''';
   }
 }
