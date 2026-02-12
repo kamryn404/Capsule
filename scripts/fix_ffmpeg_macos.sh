@@ -26,7 +26,7 @@ fi
 # Install required Homebrew dependencies for bundling
 echo "📦 Installing required Homebrew dependencies..."
 # We need to ensure these are installed and linked correctly
-brew install libiconv fribidi srt openssl@3 harfbuzz fontconfig freetype glib pcre2 graphite2 gettext libpng zlib 2>/dev/null || true
+brew install libiconv fribidi srt openssl@3 harfbuzz fontconfig freetype glib pcre2 graphite2 gettext libpng zlib expat brotli bzip2 xz 2>/dev/null || true
 
 # Determine Homebrew prefix (different on Intel vs Apple Silicon)
 HOMEBREW_PREFIX=$(brew --prefix)
@@ -115,6 +115,10 @@ find_brew_lib() {
         "$HOMEBREW_PREFIX/opt/srt/lib/$lib_name"
         "$HOMEBREW_PREFIX/opt/gettext/lib/$lib_name"
         "$HOMEBREW_PREFIX/opt/zlib/lib/$lib_name"
+        "$HOMEBREW_PREFIX/opt/expat/lib/$lib_name"
+        "$HOMEBREW_PREFIX/opt/brotli/lib/$lib_name"
+        "$HOMEBREW_PREFIX/opt/bzip2/lib/$lib_name"
+        "$HOMEBREW_PREFIX/opt/xz/lib/$lib_name"
         "$HOMEBREW_PREFIX/lib/$lib_name"
     )
 
@@ -138,7 +142,9 @@ find_brew_lib() {
 # List of libraries that are safe to use from /usr/lib (system libraries)
 # Note: libiconv is often in /usr/lib but FFmpeg links the Homebrew one for features.
 # We will bundle libiconv to be safe, as the system one might be older.
-SYSTEM_LIBS="libz.1.dylib libbz2.1.0.dylib liblzma.5.dylib libSystem.B.dylib libc++.1.dylib libobjc.A.dylib libcharset.1.dylib Foundation CoreGraphics CoreFoundation CoreVideo CoreMedia AppKit AudioToolbox VideoToolbox Security OpenGL Metal QuartzCore"
+# libexpat.1.dylib is NOT a system library on all macOS versions (it's often Homebrew),
+# so we remove it from here to ensure it gets bundled.
+SYSTEM_LIBS="libz.1.dylib libbz2.1.0.dylib liblzma.5.dylib libSystem.B.dylib libc++.1.dylib libobjc.A.dylib libcharset.1.dylib libresolv.9.dylib Foundation CoreGraphics CoreFoundation CoreVideo CoreMedia AppKit AudioToolbox VideoToolbox Security OpenGL Metal QuartzCore"
 
 is_system_lib() {
     local lib_name=$(basename "$1")
