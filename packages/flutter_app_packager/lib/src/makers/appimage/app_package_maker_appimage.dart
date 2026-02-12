@@ -306,7 +306,7 @@ class AppPackageMakerAppImage extends AppPackageMaker {
           result = await $('find', ['/', '-name', so, '-maxdepth', '4']);
         }
 
-        final out = result.stdout as String;
+        final out = result.stdout.toString();
         final paths = out
             .split('\n')
             .where((p) => p.isNotEmpty && !p.contains('/Trash'))
@@ -342,7 +342,7 @@ class AppPackageMakerAppImage extends AppPackageMaker {
         },
       ).then((value) {
         if (value.exitCode != 0) {
-          throw MakeError(value.stderr as String);
+          throw MakeError(value.stderr.toString());
         }
       });
 
