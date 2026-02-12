@@ -7,6 +7,8 @@
 # This script uses a two-pass approach:
 # Pass 1: Scan all frameworks, collect all Homebrew dependencies, bundle them
 # Pass 2: Patch all frameworks and bundled libs to use @rpath instead of absolute paths
+#
+# Compatible with bash 3.x (macOS default)
 
 set -e
 
@@ -55,20 +57,9 @@ LIBS_DIR="$PACKAGE_DIR/macos/libs"
 rm -rf "$LIBS_DIR"
 mkdir -p "$LIBS_DIR"
 
-# Collect all framework binaries
-declare -a FRAMEWORK_BINARIES
-for framework in "$PACKAGE_DIR/macos/Frameworks/"*.framework; do
-    binary_name=$(basename "$framework" .framework)
-    binary="$framework/Versions/A/$binary_name"
-    if [ ! -f "$binary" ]; then
-        binary="$framework/$binary_name"
-    fi
-    if [ -f "$binary" ]; then
-        FRAMEWORK_BINARIES+=("$binary")
-    fi
-done
-
-echo "   Found ${#FRAMEWORK_BINARIES[@]} framework binaries"
+# Temp file to track collected dependencies (bash 3.x compatible)
+DEPS_FILE=$(mktemp)
+trap "rm -f $DEPS_FILE" EXIT
 
 # Function to check if a path is a system library we should NOT bundle
 is_system_path() {
@@ -136,51 +127,53 @@ find_brew_lib() {
     return 1
 }
 
+# Function to check if dependency is already tracked
+is_dep_tracked() {
+    local lib_name="$1"
+    grep -q "^$lib_name$" "$DEPS_FILE" 2>/dev/null
+}
+
+# Function to add dependency to tracking
+track_dep() {
+    local lib_name="$1"
+    echo "$lib_name" >> "$DEPS_FILE"
+}
+
 # ============================================================================
 # PASS 1: Collect and bundle all Homebrew dependencies
 # ============================================================================
 echo ""
 echo "📦 Pass 1: Collecting and bundling Homebrew dependencies..."
 
-declare -A HOMEBREW_DEPS  # Associative array to track unique deps
-
-# Function to recursively collect deps from a binary
-collect_deps() {
-    local binary="$1"
-    local deps=$(otool -L "$binary" 2>/dev/null | tail -n +2 | awk '{print $1}')
-
-    for dep in $deps; do
-        # Skip system paths and already processed
-        is_system_path "$dep" && continue
-
-        # Only process Homebrew paths
-        if [[ "$dep" == "/opt/homebrew/"* ]] || [[ "$dep" == "/usr/local/"* ]]; then
-            local lib_name=$(basename "$dep")
-            if [ -z "${HOMEBREW_DEPS[$lib_name]}" ]; then
-                HOMEBREW_DEPS[$lib_name]="$dep"
-                echo "   Found: $lib_name"
-            fi
-        fi
-    done
-}
-
-# Collect from all framework binaries
-for binary in "${FRAMEWORK_BINARIES[@]}"; do
-    echo "   Scanning $(basename "$binary")..."
-    collect_deps "$binary"
+# Collect all framework binaries
+FRAMEWORK_BINARIES=""
+for framework in "$PACKAGE_DIR/macos/Frameworks/"*.framework; do
+    binary_name=$(basename "$framework" .framework)
+    binary="$framework/Versions/A/$binary_name"
+    if [ ! -f "$binary" ]; then
+        binary="$framework/$binary_name"
+    fi
+    if [ -f "$binary" ]; then
+        FRAMEWORK_BINARIES="$FRAMEWORK_BINARIES $binary"
+    fi
 done
 
-echo ""
-echo "   Total unique Homebrew dependencies: ${#HOMEBREW_DEPS[@]}"
+echo "   Scanning framework binaries for dependencies..."
 
-# Bundle all collected dependencies and their transitive deps
-bundle_with_deps() {
+# Recursive function to bundle a library and its dependencies
+bundle_lib() {
     local original_path="$1"
     local lib_name=$(basename "$original_path")
     local dest_path="$LIBS_DIR/$lib_name"
 
     # Skip if already bundled
     [ -f "$dest_path" ] && return 0
+
+    # Skip if already being processed (prevents infinite loops)
+    if is_dep_tracked "$lib_name"; then
+        return 0
+    fi
+    track_dep "$lib_name"
 
     # Find the actual file
     local source_path="$original_path"
@@ -202,18 +195,36 @@ bundle_with_deps() {
     # Recursively bundle its dependencies
     local sub_deps=$(otool -L "$dest_path" 2>/dev/null | tail -n +2 | awk '{print $1}')
     for sub_dep in $sub_deps; do
-        is_system_path "$sub_dep" && continue
+        if is_system_path "$sub_dep"; then
+            continue
+        fi
         if [[ "$sub_dep" == "/opt/homebrew/"* ]] || [[ "$sub_dep" == "/usr/local/"* ]]; then
-            bundle_with_deps "$sub_dep"
+            bundle_lib "$sub_dep"
         fi
     done
+
+    return 0
 }
 
-echo ""
-echo "   Bundling libraries..."
-for lib_name in "${!HOMEBREW_DEPS[@]}"; do
-    bundle_with_deps "${HOMEBREW_DEPS[$lib_name]}"
+# Scan all frameworks and bundle their Homebrew dependencies
+for binary in $FRAMEWORK_BINARIES; do
+    binary_name=$(basename "$binary")
+    echo "   Scanning $binary_name..."
+
+    deps=$(otool -L "$binary" 2>/dev/null | tail -n +2 | awk '{print $1}')
+    for dep in $deps; do
+        if is_system_path "$dep"; then
+            continue
+        fi
+        if [[ "$dep" == "/opt/homebrew/"* ]] || [[ "$dep" == "/usr/local/"* ]]; then
+            bundle_lib "$dep"
+        fi
+    done
 done
+
+BUNDLED_COUNT=$(ls -1 "$LIBS_DIR"/*.dylib 2>/dev/null | wc -l | tr -d ' ')
+echo ""
+echo "   Bundled $BUNDLED_COUNT libraries"
 
 # ============================================================================
 # PASS 2: Patch all binaries to use @rpath
@@ -225,10 +236,8 @@ patch_binary() {
     local binary="$1"
     local binary_name=$(basename "$binary")
 
-    echo "   Patching: $binary_name"
-
     # Make writable and strip signature
-    chmod +w "$binary"
+    chmod +w "$binary" 2>/dev/null || true
     codesign --remove-signature "$binary" 2>/dev/null || true
 
     # Get all current dependencies
@@ -238,39 +247,39 @@ patch_binary() {
         local dep_name=$(basename "$dep")
 
         # Skip system paths
-        is_system_path "$dep" && continue
+        if is_system_path "$dep"; then
+            continue
+        fi
 
         # Check if this is a Homebrew path we need to patch
         if [[ "$dep" == "/opt/homebrew/"* ]] || [[ "$dep" == "/usr/local/"* ]]; then
             # Check if we have this lib bundled
             if [ -f "$LIBS_DIR/$dep_name" ]; then
-                echo "      $dep_name: $dep -> @rpath/$dep_name"
                 install_name_tool -change "$dep" "@rpath/$dep_name" "$binary" 2>/dev/null || {
                     echo "      ⚠️  Failed to patch $dep_name in $binary_name"
                 }
-            else
-                echo "      ⚠️  $dep_name not bundled, cannot patch"
             fi
         fi
     done
 }
 
 # Patch framework binaries
-echo ""
 echo "   Patching framework binaries..."
-for binary in "${FRAMEWORK_BINARIES[@]}"; do
+for binary in $FRAMEWORK_BINARIES; do
+    binary_name=$(basename "$binary")
+    echo "      Patching $binary_name..."
     patch_binary "$binary"
 done
 
 # Patch bundled libraries
-echo ""
 echo "   Patching bundled libraries..."
 for lib in "$LIBS_DIR"/*.dylib; do
     [ -f "$lib" ] || continue
+    lib_name=$(basename "$lib")
+    echo "      Patching $lib_name..."
     patch_binary "$lib"
 
     # Also update the library's own ID
-    local lib_name=$(basename "$lib")
     install_name_tool -id "@rpath/$lib_name" "$lib" 2>/dev/null || true
 done
 
@@ -281,10 +290,10 @@ echo ""
 echo "🔍 Verifying patches..."
 
 FAILED=0
-for binary in "${FRAMEWORK_BINARIES[@]}"; do
+for binary in $FRAMEWORK_BINARIES; do
     binary_name=$(basename "$binary")
     if otool -L "$binary" 2>/dev/null | grep -q "/opt/homebrew\|/usr/local"; then
-        echo "❌ $binary_name still has hardcoded paths:"
+        echo "   ❌ $binary_name still has hardcoded paths:"
         otool -L "$binary" | grep -E "/opt/homebrew|/usr/local" | head -5
         FAILED=1
     else
@@ -308,7 +317,7 @@ mkdir -p "$PROJECT_FRAMEWORKS_DIR"
 
 if ls "$LIBS_DIR"/*.dylib 1> /dev/null 2>&1; then
     cp "$LIBS_DIR"/*.dylib "$PROJECT_FRAMEWORKS_DIR/"
-    echo "   Copied $(ls "$LIBS_DIR"/*.dylib | wc -l | tr -d ' ') libraries"
+    echo "   Copied $BUNDLED_COUNT libraries"
 else
     echo "   No libraries to copy"
 fi
