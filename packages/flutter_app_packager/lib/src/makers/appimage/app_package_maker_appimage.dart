@@ -294,10 +294,18 @@ class AppPackageMakerAppImage extends AppPackageMaker {
 
       // Copy included libs sequentially
       for (final so in makeConfig.include) {
-        final file = await $('locate', [so]).then((value) {
+        final file = await $('find', [
+          '/usr/lib',
+          '/lib',
+          '-name',
+          so,
+        ]).then((value) {
           if (value.exitCode != 0) {
-            throw MakeError(value.stderr as String);
+            // Fallback to a broader search if standard paths fail
+            return $('find', ['/', '-name', so, '-maxdepth', '4']);
           }
+          return value;
+        }).then((value) {
           return value.stdout as String;
         }).then((out) {
           final paths = out
