@@ -190,7 +190,7 @@ bundle_lib() {
 
     # Scan for dependencies of this lib (recursive)
     # We look for any path that isn't already @rpath or system
-    local deps=$(otool -L "$dest_dir/$lib_name" | grep -E "^[[:space:]]/" | awk '{print $1}')
+    local deps=$(otool -l "$dest_dir/$lib_name" | grep -A 2 "LC_LOAD_DYLIB" | grep "name" | awk '{print $2}' | grep "^/")
     for dep in $deps; do
         local dep_name=$(basename "$dep")
 
@@ -242,8 +242,9 @@ for framework in "$PACKAGE_DIR/macos/Frameworks/"*.framework; do
     done
 
     # Find all dependencies that look like absolute paths (Homebrew or local)
-    # We do NOT grep for just /opt/homebrew because paths can vary
-    deps=$(otool -L "$binary" | grep -E "^\t/" | awk '{print $1}')
+    # We use otool -l to find LC_LOAD_DYLIB commands which is more reliable than otool -L
+    # especially for binaries with complex link structures.
+    deps=$(otool -l "$binary" | grep -A 2 "LC_LOAD_DYLIB" | grep "name" | awk '{print $2}' | grep "^/")
 
     for dep in $deps; do
         dep_name=$(basename "$dep")
