@@ -294,29 +294,29 @@ class AppPackageMakerAppImage extends AppPackageMaker {
 
       // Copy included libs sequentially
       for (final so in makeConfig.include) {
-        final file = await $('find', [
+        var result = await $('find', [
           '/usr/lib',
           '/lib',
           '-name',
           so,
-        ]).then((value) {
-          if (value.exitCode != 0) {
-            // Fallback to a broader search if standard paths fail
-            return $('find', ['/', '-name', so, '-maxdepth', '4']);
-          }
-          return value;
-        }).then((value) {
-          return value.stdout as String;
-        }).then((out) {
-          final paths = out
-              .split('\n')
-              .where((p) => p.isNotEmpty && !p.contains('/Trash'))
-              .toList();
-          if (paths.isEmpty) {
-            throw MakeError("Can't find specified shared object $so");
-          }
-          return File(paths.first.trim());
-        });
+        ]);
+
+        if (result.exitCode != 0) {
+          // Fallback to a broader search if standard paths fail
+          result = await $('find', ['/', '-name', so, '-maxdepth', '4']);
+        }
+
+        final out = result.stdout as String;
+        final paths = out
+            .split('\n')
+            .where((p) => p.isNotEmpty && !p.contains('/Trash'))
+            .toList();
+
+        if (paths.isEmpty) {
+          throw MakeError("Can't find specified shared object $so");
+        }
+
+        final file = File(paths.first.trim());
 
         final destPath = path.join(usrLibDir, path.basename(file.path));
         if (FileSystemEntity.typeSync(destPath) == FileSystemEntityType.notFound) {
