@@ -349,7 +349,20 @@ class DesktopFfmpegService implements FfmpegService {
 
     logger.log('Executing: $_binaryPath ${args.join(' ')}');
 
-    final process = await Process.start(_binaryPath!, args);
+    // If running in an AppImage and using system FFmpeg, we must sanitize LD_LIBRARY_PATH
+    // to prevent FFmpeg from linking against AppImage's bundled libraries.
+    Map<String, String>? environment;
+    if (Platform.environment.containsKey('APPIMAGE') && _isSystemFfmpeg) {
+      environment = Map.from(Platform.environment);
+      environment.remove('LD_LIBRARY_PATH');
+    }
+
+    final process = await Process.start(
+      _binaryPath!,
+      args,
+      environment: environment,
+      includeParentEnvironment: environment == null,
+    );
     bool isCancelled = false;
     final List<String> errorOutput = [];
 
@@ -409,7 +422,19 @@ class DesktopFfmpegService implements FfmpegService {
     }
 
     // Run ffmpeg -i input
-    final result = await Process.run(_binaryPath!, ['-i', path]);
+    // If running in an AppImage and using system FFmpeg, we must sanitize LD_LIBRARY_PATH
+    Map<String, String>? environment;
+    if (Platform.environment.containsKey('APPIMAGE') && _isSystemFfmpeg) {
+      environment = Map.from(Platform.environment);
+      environment.remove('LD_LIBRARY_PATH');
+    }
+
+    final result = await Process.run(
+      _binaryPath!,
+      ['-i', path],
+      environment: environment,
+      includeParentEnvironment: environment == null,
+    );
 
     // Parse stderr (ffmpeg outputs info to stderr)
     final output = result.stderr.toString();
