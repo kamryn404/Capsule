@@ -138,15 +138,19 @@ find_brew_lib() {
 # List of libraries that are safe to use from /usr/lib (system libraries)
 # Note: libiconv is often in /usr/lib but FFmpeg links the Homebrew one for features.
 # We will bundle libiconv to be safe, as the system one might be older.
-SYSTEM_LIBS="libz.1.dylib libbz2.1.0.dylib liblzma.5.dylib libSystem.B.dylib libc++.1.dylib libobjc.A.dylib libcharset.1.dylib"
+SYSTEM_LIBS="libz.1.dylib libbz2.1.0.dylib liblzma.5.dylib libSystem.B.dylib libc++.1.dylib libobjc.A.dylib libcharset.1.dylib Foundation CoreGraphics CoreFoundation CoreVideo CoreMedia AppKit AudioToolbox VideoToolbox Security OpenGL Metal QuartzCore"
 
 is_system_lib() {
-    local lib_name="$1"
+    local lib_name=$(basename "$1")
     for sys_lib in $SYSTEM_LIBS; do
         if [ "$lib_name" = "$sys_lib" ]; then
             return 0
         fi
     done
+    # Also check if it's a system framework path
+    if [[ "$1" == "/System/Library/Frameworks/"* ]]; then
+        return 0
+    fi
     return 1
 }
 
@@ -180,14 +184,16 @@ bundle_lib() {
 
     # Scan for dependencies of this lib (recursive)
     # We look for any path that isn't already @rpath or system
-    local deps=$(otool -L "$dest_dir/$lib_name" | grep -E "/opt/homebrew|/usr/local|/usr/lib" | awk '{print $1}')
+    local deps=$(otool -L "$dest_dir/$lib_name" | grep -E "^[[:space:]]/" | awk '{print $1}')
     for dep in $deps; do
         local dep_name=$(basename "$dep")
 
-        # Skip system libraries that are safe
-        if is_system_lib "$dep_name"; then
-            # Ensure it points to /usr/lib for system libs
-            install_name_tool -change "$dep" "/usr/lib/$dep_name" "$dest_dir/$lib_name"
+        # Skip system libraries and frameworks
+        if is_system_lib "$dep"; then
+            # If it's a dylib in /usr/lib, ensure it points there
+            if [[ "$dep" == *".dylib" && "$dep" != "/usr/lib/"* && "$dep" != "/System/"* ]]; then
+                install_name_tool -change "$dep" "/usr/lib/$dep_name" "$dest_dir/$lib_name" 2>/dev/null || true
+            fi
             continue
         fi
 
@@ -236,11 +242,11 @@ for framework in "$PACKAGE_DIR/macos/Frameworks/"*.framework; do
     for dep in $deps; do
         dep_name=$(basename "$dep")
 
-        # Skip system libraries
-        if is_system_lib "$dep_name"; then
-            # Ensure it points to /usr/lib
-            if [[ "$dep" != "/usr/lib/$dep_name" ]]; then
-                 install_name_tool -change "$dep" "/usr/lib/$dep_name" "$binary"
+        # Skip system libraries and frameworks
+        if is_system_lib "$dep"; then
+            # Ensure it points to /usr/lib for system dylibs
+            if [[ "$dep" == *".dylib" && "$dep" != "/usr/lib/"* && "$dep" != "/System/"* ]]; then
+                 install_name_tool -change "$dep" "/usr/lib/$dep_name" "$binary" 2>/dev/null || true
             fi
             continue
         fi
