@@ -586,117 +586,125 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   Widget _buildHome() {
-    return Container(
-      color: Colors.transparent,
-      child: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            GestureDetector(
-              onLongPress: () {
-                showDialog(
-                  context: context,
-                  builder: (context) => AlertDialog(
-                    backgroundColor: Colors.grey[900],
-                    title: const Text(
-                      'App Logs',
-                      style: TextStyle(color: Colors.white),
-                    ),
-                    content: SizedBox(
-                      width: double.maxFinite,
-                      child: SingleChildScrollView(
-                        child: SelectableText(
-                          logger.getLogs(),
-                          style: const TextStyle(
-                            fontFamily: 'monospace',
-                            color: Colors.white70,
-                            fontSize: 12,
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onPanStart: (details) {
+        if (!Platform.isAndroid && !Platform.isIOS) {
+          windowManager.startDragging();
+        }
+      },
+      child: Container(
+        color: Colors.transparent,
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              GestureDetector(
+                onLongPress: () {
+                  showDialog(
+                    context: context,
+                    builder: (context) => AlertDialog(
+                      backgroundColor: Colors.grey[900],
+                      title: const Text(
+                        'App Logs',
+                        style: TextStyle(color: Colors.white),
+                      ),
+                      content: SizedBox(
+                        width: double.maxFinite,
+                        child: SingleChildScrollView(
+                          child: SelectableText(
+                            logger.getLogs(),
+                            style: const TextStyle(
+                              fontFamily: 'monospace',
+                              color: Colors.white70,
+                              fontSize: 12,
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                    actions: [
-                      TextButton(
-                        onPressed: () => logger.clearLogs().then(
-                          (_) => Navigator.pop(context),
+                      actions: [
+                        TextButton(
+                          onPressed: () => logger.clearLogs().then(
+                            (_) => Navigator.pop(context),
+                          ),
+                          child: const Text('Clear'),
                         ),
-                        child: const Text('Clear'),
-                      ),
-                      TextButton(
-                        onPressed: () => Navigator.pop(context),
-                        child: const Text('Close'),
-                      ),
-                    ],
+                        TextButton(
+                          onPressed: () => Navigator.pop(context),
+                          child: const Text('Close'),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+                child: SvgPicture.asset(
+                  'assets/capsule.svg',
+                  width: 120,
+                  height: 120,
+                  colorFilter: const ColorFilter.mode(
+                    Colors.white,
+                    BlendMode.srcIn,
                   ),
-                );
-              },
-              child: SvgPicture.asset(
-                'assets/capsule.svg',
-                width: 120,
-                height: 120,
-                colorFilter: const ColorFilter.mode(
-                  Colors.white,
-                  BlendMode.srcIn,
                 ),
               ),
-            ),
-            const SizedBox(height: 16),
-            const Text(
-              'Capsule',
-              style: TextStyle(
-                fontFamily: 'Krona One',
-                fontSize: 32,
-                color: Colors.white,
-              ),
-            ),
-            const SizedBox(height: 8),
-            if (!_ffmpegAvailable) _buildFfmpegMissingWarning(),
-            Text(
-              (Platform.isAndroid || Platform.isIOS)
-                  ? 'Compress any media file'
-                  : 'Drag and drop media here',
-              style: const TextStyle(
-                color: Colors.white54,
-                fontSize: 16,
-                fontWeight: FontWeight.w300,
-              ),
-            ),
-            const SizedBox(height: 40),
-            Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                _buildActionButton(
-                  icon: Icons.folder_open,
-                  label: 'Select media...',
-                  onTap: _pickFile,
+              const SizedBox(height: 16),
+              const Text(
+                'Capsule',
+                style: TextStyle(
+                  fontFamily: 'Krona One',
+                  fontSize: 32,
+                  color: Colors.white,
                 ),
-                const SizedBox(height: 16),
-                _buildActionButton(
-                  icon: Icons.camera_alt,
-                  label: 'Open Camera',
-                  onTap: () {
-                    if (Platform.isAndroid || Platform.isIOS) {
-                      _pickFromCamera();
-                    } else {
+              ),
+              const SizedBox(height: 8),
+              if (!_ffmpegAvailable) _buildFfmpegMissingWarning(),
+              Text(
+                (Platform.isAndroid || Platform.isIOS)
+                    ? 'Compress any media file'
+                    : 'Drag and drop media here',
+                style: const TextStyle(
+                  color: Colors.white54,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w300,
+                ),
+              ),
+              const SizedBox(height: 40),
+              Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  _buildActionButton(
+                    icon: Icons.folder_open,
+                    label: 'Select media...',
+                    onTap: _pickFile,
+                  ),
+                  const SizedBox(height: 16),
+                  _buildActionButton(
+                    icon: Icons.camera_alt,
+                    label: 'Open Camera',
+                    onTap: () {
+                      if (Platform.isAndroid || Platform.isIOS) {
+                        _pickFromCamera();
+                      } else {
+                        setState(() {
+                          _appMode = AppMode.camera;
+                        });
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  _buildActionButton(
+                    icon: Icons.mic,
+                    label: 'Record Audio',
+                    onTap: () {
                       setState(() {
-                        _appMode = AppMode.camera;
+                        _appMode = AppMode.audio;
                       });
-                    }
-                  },
-                ),
-                const SizedBox(height: 16),
-                _buildActionButton(
-                  icon: Icons.mic,
-                  label: 'Record Audio',
-                  onTap: () {
-                    setState(() {
-                      _appMode = AppMode.audio;
-                    });
-                  },
-                ),
-              ],
-            ),
-          ],
+                    },
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
