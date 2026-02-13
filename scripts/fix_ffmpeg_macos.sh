@@ -98,6 +98,7 @@ find_in_homebrew() {
         $HOMEBREW_PREFIX/opt/graphite2/lib
         $HOMEBREW_PREFIX/opt/libiconv/lib
         $HOMEBREW_PREFIX/opt/openssl@3/lib
+        $HOMEBREW_PREFIX/opt/openssl/lib
         $HOMEBREW_PREFIX/opt/pcre2/lib
         $HOMEBREW_PREFIX/opt/srt/lib
         $HOMEBREW_PREFIX/opt/gettext/lib
@@ -106,6 +107,7 @@ find_in_homebrew() {
         $HOMEBREW_PREFIX/opt/brotli/lib
         $HOMEBREW_PREFIX/opt/bzip2/lib
         $HOMEBREW_PREFIX/opt/xz/lib
+        $HOMEBREW_PREFIX/opt/libcrypto/lib
         $HOMEBREW_PREFIX/lib
     "
 
@@ -480,7 +482,7 @@ for framework in "$FRAMEWORKS_DIR"/*.framework; do
     done
 done
 
-# Patch bundled dylibs
+# Patch bundled dylibs - may need multiple passes since dylibs depend on each other
 echo ""
 echo "   === Bundled Dylibs ==="
 for dylib in "$FRAMEWORKS_DIR"/*.dylib; do
@@ -492,6 +494,58 @@ for dylib in "$FRAMEWORKS_DIR"/*.dylib; do
     # Update the dylib's ID
     dylib_name=$(basename "$dylib")
     install_name_tool -id "@rpath/$dylib_name" "$dylib" 2>/dev/null || true
+done
+
+# Second pass: Force-patch any remaining Homebrew references in bundled dylibs
+echo ""
+echo "   === Second Pass (force patching remaining issues) ==="
+for dylib in "$FRAMEWORKS_DIR"/*.dylib; do
+    if [ ! -f "$dylib" ]; then
+        continue
+    fi
+
+    dylib_name=$(basename "$dylib")
+
+    # Check if this dylib still has Homebrew dependencies
+    remaining_deps=$(get_deps "$dylib" | grep -E "/opt/homebrew|/usr/local" || true)
+
+    if [ -n "$remaining_deps" ]; then
+        echo "   Force-patching: $dylib_name"
+
+        # Make sure it's writable
+        chmod 755 "$dylib" 2>/dev/null
+        xattr -cr "$dylib" 2>/dev/null
+        codesign --remove-signature "$dylib" 2>/dev/null
+
+        for dep in $remaining_deps; do
+            dep_name=$(basename "$dep")
+            if [ -f "$FRAMEWORKS_DIR/$dep_name" ]; then
+                echo "      $dep -> @rpath/$dep_name"
+
+                # Try direct patch
+                if ! install_name_tool -change "$dep" "@rpath/$dep_name" "$dylib" 2>/dev/null; then
+                    # If direct fails, try copying to temp, patching, copying back
+                    temp_file="$TEMP_DIR/${dylib_name}_force_$$"
+                    cp "$dylib" "$temp_file" 2>/dev/null
+                    chmod 755 "$temp_file" 2>/dev/null
+                    codesign --remove-signature "$temp_file" 2>/dev/null
+
+                    if install_name_tool -change "$dep" "@rpath/$dep_name" "$temp_file" 2>/dev/null; then
+                        cp "$temp_file" "$dylib" 2>/dev/null
+                        chmod 755 "$dylib" 2>/dev/null
+                        echo "      ✓ Force-patched via copy"
+                    else
+                        echo "      ⚠️  Could not force-patch $dep_name"
+                    fi
+                    rm -f "$temp_file" 2>/dev/null
+                else
+                    echo "      ✓ Force-patched directly"
+                fi
+            else
+                echo "      ⚠️  $dep_name not bundled!"
+            fi
+        done
+    fi
 done
 
 # ============================================================================
