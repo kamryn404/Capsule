@@ -136,8 +136,13 @@ get_architectures() {
 
 is_fat_binary() {
     local binary="$1"
-    local arch_count=$(lipo -info "$binary" 2>/dev/null | grep -c "are:" || echo "0")
-    [ "$arch_count" -gt 0 ]
+    # "are:" appears in lipo output only for fat binaries (e.g., "are: x86_64 arm64")
+    # Thin binaries show "is architecture:" instead
+    if lipo -info "$binary" 2>/dev/null | grep -q "are:"; then
+        return 0
+    else
+        return 1
+    fi
 }
 
 # Patch a thin (single-architecture) binary
@@ -146,6 +151,7 @@ patch_thin_binary() {
     local binary_name=$(basename "$binary")
 
     chmod 755 "$binary" 2>/dev/null || true
+    xattr -cr "$binary" 2>/dev/null || true
     codesign --remove-signature "$binary" 2>/dev/null || true
 
     local deps=$(get_deps "$binary")
@@ -157,10 +163,50 @@ patch_thin_binary() {
         if [[ "$dep" == "/opt/homebrew/"* ]] || [[ "$dep" == "/usr/local/"* ]]; then
             local dep_name=$(basename "$dep")
             if [ -f "$FRAMEWORKS_DIR/$dep_name" ]; then
-                install_name_tool -change "$dep" "@rpath/$dep_name" "$binary" 2>/dev/null || true
+                install_name_tool -change "$dep" "@rpath/$dep_name" "$binary" 2>&1 || true
             fi
         fi
     done
+}
+
+# Try multiple approaches to patch a binary
+try_patch_binary() {
+    local binary="$1"
+    local dep="$2"
+    local dep_name=$(basename "$dep")
+    local new_path="@rpath/$dep_name"
+
+    # Approach 1: Direct install_name_tool
+    if install_name_tool -change "$dep" "$new_path" "$binary" 2>/dev/null; then
+        return 0
+    fi
+
+    # Approach 2: Remove signature first, then try again
+    codesign --remove-signature "$binary" 2>/dev/null || true
+    if install_name_tool -change "$dep" "$new_path" "$binary" 2>/dev/null; then
+        return 0
+    fi
+
+    # Approach 3: For fat binaries, extract/patch/recombine
+    if is_fat_binary "$binary"; then
+        return 1  # Signal to use fat binary approach
+    fi
+
+    # Approach 4: For thin binaries, try copying to temp, patching, copying back
+    local temp_copy="$TEMP_DIR/$(basename "$binary")_temp"
+    cp "$binary" "$temp_copy"
+    chmod 755 "$temp_copy"
+    codesign --remove-signature "$temp_copy" 2>/dev/null || true
+
+    if install_name_tool -change "$dep" "$new_path" "$temp_copy" 2>/dev/null; then
+        cp "$temp_copy" "$binary"
+        chmod 755 "$binary"
+        rm -f "$temp_copy"
+        return 0
+    fi
+
+    rm -f "$temp_copy"
+    return 1
 }
 
 # Patch a binary, handling fat binaries by extracting/recombining
@@ -175,7 +221,9 @@ patch_binary() {
         return 1
     fi
 
+    # Make fully writable and remove extended attributes
     chmod 755 "$binary" 2>/dev/null || true
+    xattr -cr "$binary" 2>/dev/null || true
     codesign --remove-signature "$binary" 2>/dev/null || true
 
     # Check if it has Homebrew dependencies
@@ -199,7 +247,12 @@ patch_binary() {
         if [[ "$dep" == "/opt/homebrew/"* ]] || [[ "$dep" == "/usr/local/"* ]]; then
             local dep_name=$(basename "$dep")
             if [ -f "$FRAMEWORKS_DIR/$dep_name" ]; then
-                if ! install_name_tool -change "$dep" "@rpath/$dep_name" "$binary" 2>/dev/null; then
+                # Try patching and check if it fails
+                local output
+                output=$(install_name_tool -change "$dep" "@rpath/$dep_name" "$binary" 2>&1)
+                local result=$?
+                if [ $result -ne 0 ]; then
+                    echo "      install_name_tool failed: $output"
                     direct_patch_failed=1
                     break
                 fi
@@ -207,56 +260,96 @@ patch_binary() {
         fi
     done
 
-    # If direct patching failed, try the extract/patch/recombine approach
+    # If direct patching failed, try alternative approaches
     if [ "$direct_patch_failed" -eq 1 ]; then
-        echo "      Direct patching failed, trying extract/patch/recombine..."
+        echo "      Direct patching failed, trying alternative approaches..."
 
-        if ! is_fat_binary "$binary"; then
-            echo "      ❌ Not a fat binary, cannot use alternative approach"
-            return 1
-        fi
+        # Check if it's a fat binary
+        if is_fat_binary "$binary"; then
+            # Fat binary: use extract/patch/recombine approach
+            echo "      Binary is fat, using extract/patch/recombine..."
 
-        local archs=$(get_architectures "$binary")
-        local thin_binaries=""
-        local work_dir="$TEMP_DIR/$(basename "$binary")_$$"
-        mkdir -p "$work_dir"
+            local archs=$(get_architectures "$binary")
+            local thin_binaries=""
+            local work_dir="$TEMP_DIR/$(basename "$binary")_$$"
+            mkdir -p "$work_dir"
 
-        # Extract each architecture
-        for arch in $archs; do
-            echo "      Extracting $arch..."
-            local thin_path="$work_dir/$arch"
-            if ! lipo -thin "$arch" -output "$thin_path" "$binary" 2>/dev/null; then
-                echo "      ❌ Failed to extract $arch"
+            # Extract each architecture
+            for arch in $archs; do
+                echo "      Extracting $arch..."
+                local thin_path="$work_dir/$arch"
+                if ! lipo -thin "$arch" -output "$thin_path" "$binary" 2>/dev/null; then
+                    echo "      ❌ Failed to extract $arch"
+                    rm -rf "$work_dir"
+                    return 1
+                fi
+                thin_binaries="$thin_binaries $thin_path"
+            done
+
+            # Patch each thin binary
+            for thin in $thin_binaries; do
+                echo "      Patching $(basename "$thin")..."
+                patch_thin_binary "$thin"
+            done
+
+            # Recombine into fat binary
+            echo "      Recombining architectures..."
+            local new_binary="$work_dir/combined"
+            if ! lipo -create $thin_binaries -output "$new_binary" 2>/dev/null; then
+                echo "      ❌ Failed to recombine architectures"
+                rm -rf "$work_dir"
                 return 1
             fi
-            thin_binaries="$thin_binaries $thin_path"
-        done
 
-        # Patch each thin binary
-        for thin in $thin_binaries; do
-            echo "      Patching $(basename "$thin")..."
-            patch_thin_binary "$thin"
-        done
+            # Replace original with patched version
+            cp "$new_binary" "$binary"
+            chmod 755 "$binary"
+            rm -rf "$work_dir"
 
-        # Recombine into fat binary
-        echo "      Recombining architectures..."
-        local new_binary="$work_dir/combined"
-        if ! lipo -create $thin_binaries -output "$new_binary" 2>/dev/null; then
-            echo "      ❌ Failed to recombine architectures"
-            return 1
+            echo "      ✓ Successfully patched via extract/recombine"
+            return 0
+        else
+            # Thin binary: try patching a copy
+            echo "      Binary is thin, trying copy-patch approach..."
+
+            local temp_binary="$TEMP_DIR/$(basename "$binary")_thin_$$"
+            cp -L "$binary" "$temp_binary"
+            chmod 755 "$temp_binary"
+            xattr -cr "$temp_binary" 2>/dev/null || true
+            codesign --remove-signature "$temp_binary" 2>/dev/null || true
+
+            # Try patching the copy
+            local thin_patch_ok=1
+            for dep in $deps; do
+                if [[ "$dep" == "/opt/homebrew/"* ]] || [[ "$dep" == "/usr/local/"* ]]; then
+                    local dep_name=$(basename "$dep")
+                    if [ -f "$FRAMEWORKS_DIR/$dep_name" ]; then
+                        if ! install_name_tool -change "$dep" "@rpath/$dep_name" "$temp_binary" 2>/dev/null; then
+                            thin_patch_ok=0
+                            break
+                        fi
+                    fi
+                fi
+            done
+
+            if [ "$thin_patch_ok" -eq 1 ]; then
+                cp "$temp_binary" "$binary"
+                chmod 755 "$binary"
+                rm -f "$temp_binary"
+                echo "      ✓ Successfully patched via copy approach"
+                return 0
+            fi
+
+            rm -f "$temp_binary"
+            echo "      ⚠️  Could not patch thin binary, skipping..."
+            return 0
         fi
-
-        # Replace original with patched version
-        cp "$new_binary" "$binary"
-        chmod 755 "$binary"
-
-        echo "      ✓ Successfully patched via extract/recombine"
-    else
-        echo "      ✓ Direct patching succeeded"
     fi
 
+    echo "      ✓ Direct patching succeeded"
     return 0
 }
+
 
 # ============================================================================
 # PASS 1: Collect ALL Homebrew dependencies recursively
@@ -340,8 +433,11 @@ if [ "$DEP_COUNT" -gt 0 ]; then
         fi
 
         echo "   Bundling: $lib_name"
-        cp "$source_path" "$dest_path"
+        # Use cp -L to follow symlinks and get the actual file
+        cp -L "$source_path" "$dest_path"
+        # Make fully writable and remove any extended attributes
         chmod 755 "$dest_path"
+        xattr -cr "$dest_path" 2>/dev/null || true
         codesign --remove-signature "$dest_path" 2>/dev/null || true
     done < "$HOMEBREW_DEPS_FILE"
 fi
