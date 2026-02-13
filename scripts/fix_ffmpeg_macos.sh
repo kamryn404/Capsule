@@ -1,118 +1,134 @@
 #!/bin/bash
-# fix_ffmpeg_macos.sh - Fix FFmpeg kit library paths on macOS by bundling dependencies
+# fix_ffmpeg_macos.sh - Post-build script to fix FFmpeg library paths in the final .app bundle
 #
-# The pre-built FFmpeg frameworks from ffmpeg_kit_flutter_new_full have hardcoded
-# Homebrew library paths that don't exist on end-user machines.
+# This script patches the final .app bundle AFTER Flutter builds it.
+# It ensures all Homebrew dependencies are bundled and patched to use @rpath.
 #
-# This script uses a two-pass approach:
-# Pass 1: Scan all frameworks, collect all Homebrew dependencies, bundle them
-# Pass 2: Patch all frameworks and bundled libs to use @rpath instead of absolute paths
+# Usage:
+#   ./scripts/fix_ffmpeg_macos.sh [path/to/App.app]
+#
+# If no path is provided, it will look for the app in build/macos/Build/Products/Release/
 #
 # Compatible with bash 3.x (macOS default)
 
 set -e
 
-echo "🔧 Setting up FFmpeg Kit macOS fix..."
+echo "🔧 FFmpeg macOS Post-Build Fix"
+echo "==============================="
 
-if [[ "$OSTYPE" != "darwin"* ]]; then
-    echo "❌ This script is only for macOS."
+# Find the .app bundle
+APP_PATH="$1"
+if [ -z "$APP_PATH" ]; then
+    # Try to find it in the default Flutter build location
+    APP_PATH=$(find build/macos/Build/Products/Release -name "*.app" -type d 2>/dev/null | head -n 1)
+fi
+
+if [ -z "$APP_PATH" ] || [ ! -d "$APP_PATH" ]; then
+    echo "❌ Error: Could not find .app bundle"
+    echo "   Usage: $0 [path/to/App.app]"
+    echo "   Or run 'flutter build macos' first"
     exit 1
 fi
 
-# Install required Homebrew dependencies for bundling
-echo "📦 Installing required Homebrew dependencies..."
-brew install libiconv fribidi srt openssl@3 harfbuzz fontconfig freetype glib pcre2 graphite2 gettext libpng zlib expat brotli 2>/dev/null || true
+echo "   App bundle: $APP_PATH"
 
-# Determine Homebrew prefix (different on Intel vs Apple Silicon)
-HOMEBREW_PREFIX=$(brew --prefix)
-echo "   Using Homebrew prefix: $HOMEBREW_PREFIX"
-
-# Find the package in pub cache
-PUB_CACHE_HOME="${PUB_CACHE:-$HOME/.pub-cache}"
-PACKAGE_DIR=$(find "$PUB_CACHE_HOME/hosted/pub.dev" -maxdepth 2 -type d -name "ffmpeg_kit_flutter_new_full-*" | head -n 1)
-
-if [ -z "$PACKAGE_DIR" ]; then
-    echo "❌ FFmpeg kit package not found in pub cache. Run 'flutter pub get' first."
+# Verify it's a valid .app bundle
+if [ ! -d "$APP_PATH/Contents/MacOS" ]; then
+    echo "❌ Error: Invalid .app bundle (missing Contents/MacOS)"
     exit 1
 fi
 
-echo "   Found package at: $PACKAGE_DIR"
-
-# Ensure frameworks exist (download if missing)
-if [ ! -d "$PACKAGE_DIR/macos/Frameworks" ]; then
-    echo "⬇️  Frameworks not found. Downloading..."
-    if [ -f "$PACKAGE_DIR/scripts/setup_macos.sh" ]; then
-        pushd "$PACKAGE_DIR/macos" > /dev/null
-        chmod +x ../scripts/setup_macos.sh
-        ../scripts/setup_macos.sh
-        popd > /dev/null
-    else
-        echo "❌ setup_macos.sh not found in package."
-        exit 1
-    fi
+# Determine Homebrew prefix
+if [ -d "/opt/homebrew" ]; then
+    HOMEBREW_PREFIX="/opt/homebrew"
+elif [ -d "/usr/local/Homebrew" ]; then
+    HOMEBREW_PREFIX="/usr/local"
+else
+    echo "❌ Error: Homebrew not found"
+    exit 1
 fi
+echo "   Homebrew prefix: $HOMEBREW_PREFIX"
 
-# Setup directories
-LIBS_DIR="$PACKAGE_DIR/macos/libs"
-rm -rf "$LIBS_DIR"
-mkdir -p "$LIBS_DIR"
+# Setup
+FRAMEWORKS_DIR="$APP_PATH/Contents/Frameworks"
+mkdir -p "$FRAMEWORKS_DIR"
 
-# Temp file to track collected dependencies (bash 3.x compatible)
-DEPS_FILE=$(mktemp)
-trap "rm -f $DEPS_FILE" EXIT
+# Temp file to track processed libraries (bash 3.x compatible)
+PROCESSED_FILE=$(mktemp)
+HOMEBREW_DEPS_FILE=$(mktemp)
+trap "rm -f $PROCESSED_FILE $HOMEBREW_DEPS_FILE" EXIT
 
-# Function to check if a path is a system library we should NOT bundle
+# ============================================================================
+# Helper Functions
+# ============================================================================
+
+# Check if a path is a system library we should NOT bundle
 is_system_path() {
     local path="$1"
-    # System frameworks
-    [[ "$path" == "/System/Library/"* ]] && return 0
-    # System libraries
-    [[ "$path" == "/usr/lib/libSystem"* ]] && return 0
-    [[ "$path" == "/usr/lib/libc++"* ]] && return 0
-    [[ "$path" == "/usr/lib/libobjc"* ]] && return 0
-    [[ "$path" == "/usr/lib/libz."* ]] && return 0
-    [[ "$path" == "/usr/lib/libbz2."* ]] && return 0
-    [[ "$path" == "/usr/lib/liblzma."* ]] && return 0
-    [[ "$path" == "/usr/lib/libresolv."* ]] && return 0
-    [[ "$path" == "/usr/lib/libcharset."* ]] && return 0
-    [[ "$path" == "/usr/lib/libiconv."* ]] && return 0
-    [[ "$path" == "/usr/lib/libexpat."* ]] && return 0
-    # @rpath and @executable_path are already relative
-    [[ "$path" == "@rpath/"* ]] && return 0
-    [[ "$path" == "@executable_path/"* ]] && return 0
-    [[ "$path" == "@loader_path/"* ]] && return 0
+    case "$path" in
+        /System/Library/*) return 0 ;;
+        /usr/lib/libSystem*) return 0 ;;
+        /usr/lib/libc++*) return 0 ;;
+        /usr/lib/libobjc*) return 0 ;;
+        /usr/lib/libz.*) return 0 ;;
+        /usr/lib/libbz2.*) return 0 ;;
+        /usr/lib/liblzma.*) return 0 ;;
+        /usr/lib/libresolv.*) return 0 ;;
+        /usr/lib/libcharset.*) return 0 ;;
+        /usr/lib/libiconv.*) return 0 ;;
+        /usr/lib/libexpat.*) return 0 ;;
+        /usr/lib/libsqlite3.*) return 0 ;;
+        /usr/lib/libxml2.*) return 0 ;;
+        /usr/lib/libcurl.*) return 0 ;;
+        @rpath/*) return 0 ;;
+        @executable_path/*) return 0 ;;
+        @loader_path/*) return 0 ;;
+    esac
     return 1
 }
 
-# Function to find a library in Homebrew
-find_brew_lib() {
+# Check if a library name has been processed
+is_processed() {
+    local name="$1"
+    grep -q "^$name$" "$PROCESSED_FILE" 2>/dev/null
+}
+
+# Mark a library as processed
+mark_processed() {
+    local name="$1"
+    echo "$name" >> "$PROCESSED_FILE"
+}
+
+# Find a library in Homebrew
+find_in_homebrew() {
     local lib_name="$1"
 
-    # Common Homebrew opt paths
-    local search_paths=(
-        "$HOMEBREW_PREFIX/opt/fontconfig/lib"
-        "$HOMEBREW_PREFIX/opt/freetype/lib"
-        "$HOMEBREW_PREFIX/opt/fribidi/lib"
-        "$HOMEBREW_PREFIX/opt/harfbuzz/lib"
-        "$HOMEBREW_PREFIX/opt/glib/lib"
-        "$HOMEBREW_PREFIX/opt/graphite2/lib"
-        "$HOMEBREW_PREFIX/opt/libiconv/lib"
-        "$HOMEBREW_PREFIX/opt/libpng/lib"
-        "$HOMEBREW_PREFIX/opt/openssl@3/lib"
-        "$HOMEBREW_PREFIX/opt/pcre2/lib"
-        "$HOMEBREW_PREFIX/opt/srt/lib"
-        "$HOMEBREW_PREFIX/opt/gettext/lib"
-        "$HOMEBREW_PREFIX/opt/zlib/lib"
-        "$HOMEBREW_PREFIX/opt/expat/lib"
-        "$HOMEBREW_PREFIX/opt/brotli/lib"
-        "$HOMEBREW_PREFIX/opt/bzip2/lib"
-        "$HOMEBREW_PREFIX/opt/xz/lib"
-        "$HOMEBREW_PREFIX/lib"
-    )
+    # Common Homebrew package locations
+    local search_dirs="
+        $HOMEBREW_PREFIX/opt/libpng/lib
+        $HOMEBREW_PREFIX/opt/fontconfig/lib
+        $HOMEBREW_PREFIX/opt/freetype/lib
+        $HOMEBREW_PREFIX/opt/fribidi/lib
+        $HOMEBREW_PREFIX/opt/harfbuzz/lib
+        $HOMEBREW_PREFIX/opt/glib/lib
+        $HOMEBREW_PREFIX/opt/graphite2/lib
+        $HOMEBREW_PREFIX/opt/libiconv/lib
+        $HOMEBREW_PREFIX/opt/openssl@3/lib
+        $HOMEBREW_PREFIX/opt/pcre2/lib
+        $HOMEBREW_PREFIX/opt/srt/lib
+        $HOMEBREW_PREFIX/opt/gettext/lib
+        $HOMEBREW_PREFIX/opt/zlib/lib
+        $HOMEBREW_PREFIX/opt/expat/lib
+        $HOMEBREW_PREFIX/opt/brotli/lib
+        $HOMEBREW_PREFIX/opt/bzip2/lib
+        $HOMEBREW_PREFIX/opt/xz/lib
+        $HOMEBREW_PREFIX/opt/intltool/lib
+        $HOMEBREW_PREFIX/lib
+    "
 
-    for search_path in "${search_paths[@]}"; do
-        if [ -f "$search_path/$lib_name" ]; then
-            echo "$search_path/$lib_name"
+    for dir in $search_dirs; do
+        if [ -f "$dir/$lib_name" ]; then
+            echo "$dir/$lib_name"
             return 0
         fi
     done
@@ -127,121 +143,135 @@ find_brew_lib() {
     return 1
 }
 
-# Function to check if dependency is already tracked
-is_dep_tracked() {
-    local lib_name="$1"
-    grep -q "^$lib_name$" "$DEPS_FILE" 2>/dev/null
-}
-
-# Function to add dependency to tracking
-track_dep() {
-    local lib_name="$1"
-    echo "$lib_name" >> "$DEPS_FILE"
+# Get all dependencies of a binary
+get_deps() {
+    local binary="$1"
+    otool -L "$binary" 2>/dev/null | tail -n +2 | awk '{print $1}'
 }
 
 # ============================================================================
-# PASS 1: Collect and bundle all Homebrew dependencies
+# PASS 1: Collect ALL Homebrew dependencies recursively
 # ============================================================================
 echo ""
-echo "📦 Pass 1: Collecting and bundling Homebrew dependencies..."
+echo "📦 Pass 1: Scanning for Homebrew dependencies..."
 
-# Collect all framework binaries
-FRAMEWORK_BINARIES=""
-for framework in "$PACKAGE_DIR/macos/Frameworks/"*.framework; do
-    binary_name=$(basename "$framework" .framework)
-    binary="$framework/Versions/A/$binary_name"
-    if [ ! -f "$binary" ]; then
-        binary="$framework/$binary_name"
-    fi
-    if [ -f "$binary" ]; then
-        FRAMEWORK_BINARIES="$FRAMEWORK_BINARIES $binary"
-    fi
+# Recursively collect dependencies
+collect_deps() {
+    local binary="$1"
+    local deps=$(get_deps "$binary")
+
+    for dep in $deps; do
+        # Skip system paths
+        if is_system_path "$dep"; then
+            continue
+        fi
+
+        # Only process Homebrew paths
+        if [[ "$dep" == "/opt/homebrew/"* ]] || [[ "$dep" == "/usr/local/"* ]]; then
+            local lib_name=$(basename "$dep")
+
+            # Skip if already collected
+            if grep -q "^$lib_name:" "$HOMEBREW_DEPS_FILE" 2>/dev/null; then
+                continue
+            fi
+
+            # Record the dependency
+            echo "$lib_name:$dep" >> "$HOMEBREW_DEPS_FILE"
+            echo "   Found: $lib_name"
+
+            # Find and recursively scan this library
+            local lib_path=$(find_in_homebrew "$lib_name")
+            if [ -n "$lib_path" ] && [ -f "$lib_path" ]; then
+                collect_deps "$lib_path"
+            fi
+        fi
+    done
+}
+
+# Scan all binaries in the app
+echo "   Scanning main executable..."
+for exe in "$APP_PATH/Contents/MacOS"/*; do
+    [ -f "$exe" ] && collect_deps "$exe"
 done
 
-echo "   Scanning framework binaries for dependencies..."
+echo "   Scanning frameworks..."
+for framework in "$FRAMEWORKS_DIR"/*.framework; do
+    [ -d "$framework" ] || continue
+    framework_name=$(basename "$framework" .framework)
 
-# Recursive function to bundle a library and its dependencies
-bundle_lib() {
-    local original_path="$1"
-    local lib_name=$(basename "$original_path")
-    local dest_path="$LIBS_DIR/$lib_name"
-
-    # Skip if already bundled
-    [ -f "$dest_path" ] && return 0
-
-    # Skip if already being processed (prevents infinite loops)
-    if is_dep_tracked "$lib_name"; then
-        return 0
-    fi
-    track_dep "$lib_name"
-
-    # Find the actual file
-    local source_path="$original_path"
-    if [ ! -f "$source_path" ]; then
-        source_path=$(find_brew_lib "$lib_name")
-        if [ -z "$source_path" ]; then
-            echo "   ⚠️  Warning: Could not find $lib_name, skipping..."
-            return 1
+    # Try different framework binary locations
+    for binary in "$framework/Versions/A/$framework_name" "$framework/$framework_name"; do
+        if [ -f "$binary" ]; then
+            echo "      Scanning $framework_name..."
+            collect_deps "$binary"
+            break
         fi
+    done
+done
+
+echo "   Scanning existing dylibs..."
+for dylib in "$FRAMEWORKS_DIR"/*.dylib; do
+    [ -f "$dylib" ] || continue
+    dylib_name=$(basename "$dylib")
+    echo "      Scanning $dylib_name..."
+    collect_deps "$dylib"
+done
+
+# Count dependencies
+DEP_COUNT=$(wc -l < "$HOMEBREW_DEPS_FILE" | tr -d ' ')
+echo ""
+echo "   Found $DEP_COUNT Homebrew dependencies to bundle"
+
+# ============================================================================
+# PASS 2: Bundle all collected dependencies
+# ============================================================================
+echo ""
+echo "📦 Pass 2: Bundling dependencies..."
+
+while IFS=: read -r lib_name original_path; do
+    [ -z "$lib_name" ] && continue
+
+    dest_path="$FRAMEWORKS_DIR/$lib_name"
+
+    # Skip if already exists
+    if [ -f "$dest_path" ]; then
+        echo "   $lib_name (already bundled)"
+        continue
+    fi
+
+    # Find the library
+    source_path=$(find_in_homebrew "$lib_name")
+    if [ -z "$source_path" ]; then
+        echo "   ⚠️  $lib_name not found in Homebrew, skipping..."
+        continue
     fi
 
     echo "   Bundling: $lib_name"
     cp "$source_path" "$dest_path"
     chmod +w "$dest_path"
 
-    # Strip code signature (we'll re-sign later during build)
+    # Remove code signature (we'll re-sign during packaging)
     codesign --remove-signature "$dest_path" 2>/dev/null || true
-
-    # Recursively bundle its dependencies
-    local sub_deps=$(otool -L "$dest_path" 2>/dev/null | tail -n +2 | awk '{print $1}')
-    for sub_dep in $sub_deps; do
-        if is_system_path "$sub_dep"; then
-            continue
-        fi
-        if [[ "$sub_dep" == "/opt/homebrew/"* ]] || [[ "$sub_dep" == "/usr/local/"* ]]; then
-            bundle_lib "$sub_dep"
-        fi
-    done
-
-    return 0
-}
-
-# Scan all frameworks and bundle their Homebrew dependencies
-for binary in $FRAMEWORK_BINARIES; do
-    binary_name=$(basename "$binary")
-    echo "   Scanning $binary_name..."
-
-    deps=$(otool -L "$binary" 2>/dev/null | tail -n +2 | awk '{print $1}')
-    for dep in $deps; do
-        if is_system_path "$dep"; then
-            continue
-        fi
-        if [[ "$dep" == "/opt/homebrew/"* ]] || [[ "$dep" == "/usr/local/"* ]]; then
-            bundle_lib "$dep"
-        fi
-    done
-done
-
-BUNDLED_COUNT=$(ls -1 "$LIBS_DIR"/*.dylib 2>/dev/null | wc -l | tr -d ' ')
-echo ""
-echo "   Bundled $BUNDLED_COUNT libraries"
+done < "$HOMEBREW_DEPS_FILE"
 
 # ============================================================================
-# PASS 2: Patch all binaries to use @rpath
+# PASS 3: Patch ALL binaries to use @rpath
 # ============================================================================
 echo ""
-echo "🔧 Pass 2: Patching all binaries to use @rpath..."
+echo "🔧 Pass 3: Patching binaries to use @rpath..."
 
 patch_binary() {
     local binary="$1"
     local binary_name=$(basename "$binary")
 
-    # Make writable and strip signature
+    # Make writable
     chmod +w "$binary" 2>/dev/null || true
+
+    # Remove existing signature
     codesign --remove-signature "$binary" 2>/dev/null || true
 
-    # Get all current dependencies
-    local deps=$(otool -L "$binary" 2>/dev/null | tail -n +2 | awk '{print $1}')
+    # Get all dependencies
+    local deps=$(get_deps "$binary")
 
     for dep in $deps; do
         local dep_name=$(basename "$dep")
@@ -251,136 +281,113 @@ patch_binary() {
             continue
         fi
 
-        # Check if this is a Homebrew path we need to patch
+        # Patch Homebrew paths to @rpath
         if [[ "$dep" == "/opt/homebrew/"* ]] || [[ "$dep" == "/usr/local/"* ]]; then
-            # Check if we have this lib bundled
-            if [ -f "$LIBS_DIR/$dep_name" ]; then
-                install_name_tool -change "$dep" "@rpath/$dep_name" "$binary" 2>/dev/null || {
-                    echo "      ⚠️  Failed to patch $dep_name in $binary_name"
-                }
+            if [ -f "$FRAMEWORKS_DIR/$dep_name" ]; then
+                install_name_tool -change "$dep" "@rpath/$dep_name" "$binary" 2>/dev/null || true
             fi
         fi
     done
 }
 
-# Patch framework binaries
-echo "   Patching framework binaries..."
-for binary in $FRAMEWORK_BINARIES; do
-    binary_name=$(basename "$binary")
-    echo "      Patching $binary_name..."
-    patch_binary "$binary"
+# Patch main executable
+echo "   Patching main executable..."
+for exe in "$APP_PATH/Contents/MacOS"/*; do
+    [ -f "$exe" ] || continue
+    echo "      $(basename "$exe")"
+    patch_binary "$exe"
 done
 
-# Patch bundled libraries
-echo "   Patching bundled libraries..."
-for lib in "$LIBS_DIR"/*.dylib; do
-    [ -f "$lib" ] || continue
-    lib_name=$(basename "$lib")
-    echo "      Patching $lib_name..."
-    patch_binary "$lib"
+# Patch frameworks
+echo "   Patching frameworks..."
+for framework in "$FRAMEWORKS_DIR"/*.framework; do
+    [ -d "$framework" ] || continue
+    framework_name=$(basename "$framework" .framework)
 
-    # Also update the library's own ID
-    install_name_tool -id "@rpath/$lib_name" "$lib" 2>/dev/null || true
+    for binary in "$framework/Versions/A/$framework_name" "$framework/$framework_name"; do
+        if [ -f "$binary" ]; then
+            echo "      $framework_name"
+            patch_binary "$binary"
+            break
+        fi
+    done
+done
+
+# Patch bundled dylibs
+echo "   Patching bundled dylibs..."
+for dylib in "$FRAMEWORKS_DIR"/*.dylib; do
+    [ -f "$dylib" ] || continue
+    dylib_name=$(basename "$dylib")
+    echo "      $dylib_name"
+    patch_binary "$dylib"
+
+    # Also update the dylib's own ID
+    install_name_tool -id "@rpath/$dylib_name" "$dylib" 2>/dev/null || true
 done
 
 # ============================================================================
-# Verification
+# PASS 4: Verification
 # ============================================================================
 echo ""
-echo "🔍 Verifying patches..."
+echo "🔍 Pass 4: Verifying all binaries..."
 
 FAILED=0
-for binary in $FRAMEWORK_BINARIES; do
-    binary_name=$(basename "$binary")
-    if otool -L "$binary" 2>/dev/null | grep -q "/opt/homebrew\|/usr/local"; then
-        echo "   ❌ $binary_name still has hardcoded paths:"
-        otool -L "$binary" | grep -E "/opt/homebrew|/usr/local" | head -5
-        FAILED=1
-    else
-        echo "   ✅ $binary_name OK"
+CHECKED=0
+
+verify_binary() {
+    local binary="$1"
+    local name="$2"
+
+    CHECKED=$((CHECKED + 1))
+
+    local bad_deps=$(otool -L "$binary" 2>/dev/null | grep -E "/opt/homebrew|/usr/local" | awk '{print $1}')
+
+    if [ -n "$bad_deps" ]; then
+        echo "   ❌ $name has unresolved Homebrew dependencies:"
+        for dep in $bad_deps; do
+            echo "      - $dep"
+        done
+        FAILED=$((FAILED + 1))
+        return 1
     fi
+
+    return 0
+}
+
+# Check main executable
+for exe in "$APP_PATH/Contents/MacOS"/*; do
+    [ -f "$exe" ] && verify_binary "$exe" "$(basename "$exe")"
 done
 
-if [ "$FAILED" -eq 1 ]; then
+# Check frameworks
+for framework in "$FRAMEWORKS_DIR"/*.framework; do
+    [ -d "$framework" ] || continue
+    framework_name=$(basename "$framework" .framework)
+
+    for binary in "$framework/Versions/A/$framework_name" "$framework/$framework_name"; do
+        if [ -f "$binary" ]; then
+            verify_binary "$binary" "$framework_name.framework"
+            break
+        fi
+    done
+done
+
+# Check dylibs
+for dylib in "$FRAMEWORKS_DIR"/*.dylib; do
+    [ -f "$dylib" ] || continue
+    verify_binary "$dylib" "$(basename "$dylib")"
+done
+
+echo ""
+if [ "$FAILED" -gt 0 ]; then
+    echo "❌ FAILED: $FAILED of $CHECKED binaries have unresolved dependencies!"
     echo ""
-    echo "❌ Some binaries still have hardcoded paths. Build may fail on other machines."
+    echo "   This app will NOT work on machines without Homebrew."
+    echo "   Please check the errors above and ensure all dependencies are bundled."
     exit 1
 fi
 
-# ============================================================================
-# Copy to project and update Xcode
-# ============================================================================
+echo "✅ SUCCESS: All $CHECKED binaries verified!"
 echo ""
-echo "📂 Copying bundled libs to macos/Runner/Frameworks..."
-PROJECT_FRAMEWORKS_DIR="macos/Runner/Frameworks"
-mkdir -p "$PROJECT_FRAMEWORKS_DIR"
-
-if ls "$LIBS_DIR"/*.dylib 1> /dev/null 2>&1; then
-    cp "$LIBS_DIR"/*.dylib "$PROJECT_FRAMEWORKS_DIR/"
-    echo "   Copied $BUNDLED_COUNT libraries"
-else
-    echo "   No libraries to copy"
-fi
-
-echo ""
-echo "📝 Updating Xcode project to embed libraries..."
-
-cat <<'RUBY_EOF' > scripts/update_xcode.rb
-require 'xcodeproj'
-
-project_path = 'macos/Runner.xcodeproj'
-project = Xcodeproj::Project.open(project_path)
-target = project.targets.find { |t| t.name == 'Runner' }
-group = project.main_group['Frameworks'] || project.main_group.new_group('Frameworks')
-
-puts "Adding linker flags..."
-target.build_configurations.each do |config|
-  config.build_settings['OTHER_LDFLAGS'] ||= '$(inherited)'
-  flags = config.build_settings['OTHER_LDFLAGS']
-  ['-Wl,-no_warn_duplicate_libraries', '-Wl,-ld_classic'].each do |flag|
-    if flags.is_a?(String)
-      flags = "#{flags} #{flag}" unless flags.include?(flag)
-    elsif flags.is_a?(Array)
-      flags << flag unless flags.include?(flag)
-    end
-  end
-  config.build_settings['OTHER_LDFLAGS'] = flags
-end
-
-embed_phase = target.copy_files_build_phases.find { |p| p.name == 'Embed Frameworks' || p.dst_subfolder_spec == 10 }
-if embed_phase.nil?
-  embed_phase = target.new_copy_files_build_phase('Embed Frameworks')
-  embed_phase.dst_subfolder_spec = "10"
-end
-
-puts "Cleaning existing dylib references..."
-group.files.to_a.each do |file_ref|
-  if file_ref.path && file_ref.path.end_with?('.dylib')
-    file_ref.remove_from_project
-  end
-end
-
-frameworks_dir = 'macos/Runner/Frameworks'
-Dir.glob("#{frameworks_dir}/*.dylib").each do |file|
-  filename = File.basename(file)
-  relative_path = file.sub(/^macos\//, '')
-  file_ref = group.new_reference(relative_path)
-  build_file = embed_phase.add_file_reference(file_ref)
-  build_file.settings = { 'ATTRIBUTES' => ['CodeSignOnCopy', 'RemoveHeadersOnCopy'] }
-  puts "   Added #{filename}"
-end
-
-project.save
-puts "Xcode project updated."
-RUBY_EOF
-
-ruby scripts/update_xcode.rb
-rm scripts/update_xcode.rb
-
-echo ""
-echo "🔄 Forcing pod install update..."
-rm -f macos/Podfile.lock
-
-echo ""
-echo "✅ FFmpeg macOS fix completed successfully!"
-echo "   Bundled libraries are in: $PROJECT_FRAMEWORKS_DIR"
+echo "   The app bundle at $APP_PATH is ready for distribution."
+echo "   All Homebrew dependencies have been bundled and patched."

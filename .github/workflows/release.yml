@@ -22,12 +22,9 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Patch FFmpeg frameworks to use system libraries
+      - name: Install Homebrew dependencies for bundling
         run: |
-          # The ffmpeg_kit_flutter_new_full package has pre-built frameworks with
-          # hardcoded Homebrew library paths. Patch them to use system libraries
-          # so the app doesn't require end users to install Homebrew.
-          bash scripts/fix_ffmpeg_macos.sh
+          brew install libpng fontconfig freetype fribidi harfbuzz graphite2 glib pcre2 srt openssl@3 gettext expat brotli
 
       - name: Install fastforge
         run: dart pub global activate fastforge
@@ -38,8 +35,49 @@ jobs:
       - name: Clean dist folder
         run: rm -rf dist/
 
+      - name: Build macOS app
+        run: flutter build macos --release
+
+      - name: Fix FFmpeg dependencies in app bundle
+        run: |
+          # Find the built .app and patch all Homebrew dependencies
+          APP_PATH=$(find build/macos/Build/Products/Release -name "*.app" -type d | head -n 1)
+          echo "Found app: $APP_PATH"
+          bash scripts/fix_ffmpeg_macos.sh "$APP_PATH"
+
+      - name: Re-sign app bundle
+        run: |
+          APP_PATH=$(find build/macos/Build/Products/Release -name "*.app" -type d | head -n 1)
+          echo "Re-signing $APP_PATH..."
+
+          # Sign all dylibs first
+          find "$APP_PATH/Contents/Frameworks" -name "*.dylib" -exec codesign --force --sign - {} \;
+
+          # Sign all frameworks
+          find "$APP_PATH/Contents/Frameworks" -name "*.framework" -exec codesign --force --sign - {} \;
+
+          # Sign the main app
+          codesign --force --sign - "$APP_PATH"
+
+          echo "Re-signing complete"
+
       - name: Build macOS DMG
-        run: fastforge release --name release --jobs macos-dmg
+        run: |
+          # Create DMG from the patched app
+          mkdir -p dist
+          APP_PATH=$(find build/macos/Build/Products/Release -name "*.app" -type d | head -n 1)
+          APP_NAME=$(basename "$APP_PATH" .app)
+
+          # Create a temporary directory for DMG contents
+          DMG_DIR=$(mktemp -d)
+          cp -R "$APP_PATH" "$DMG_DIR/"
+          ln -s /Applications "$DMG_DIR/Applications"
+
+          # Create DMG
+          hdiutil create -volname "$APP_NAME" -srcfolder "$DMG_DIR" -ov -format UDZO "dist/$APP_NAME.dmg"
+
+          rm -rf "$DMG_DIR"
+          echo "Created dist/$APP_NAME.dmg"
 
       - name: Upload macOS artifact
         uses: actions/upload-artifact@v4
