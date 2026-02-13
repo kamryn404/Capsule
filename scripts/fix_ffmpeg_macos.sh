@@ -62,6 +62,19 @@ trap "rm -rf $TEMP_DIR $HOMEBREW_DEPS_FILE" EXIT
 # Helper Functions
 # ============================================================================
 
+# Libraries we intentionally skip - not needed for local media compression
+# libsrt = Secure Reliable Transport (network streaming protocol)
+# libssl/libcrypto = OpenSSL (needed by libsrt, not needed for local files)
+should_skip_lib() {
+    local lib_name="$1"
+    case "$lib_name" in
+        libsrt*) return 0 ;;
+        libssl*) return 0 ;;
+        libcrypto*) return 0 ;;
+    esac
+    return 1
+}
+
 is_system_path() {
     local path="$1"
     case "$path" in
@@ -97,17 +110,13 @@ find_in_homebrew() {
         $HOMEBREW_PREFIX/opt/glib/lib
         $HOMEBREW_PREFIX/opt/graphite2/lib
         $HOMEBREW_PREFIX/opt/libiconv/lib
-        $HOMEBREW_PREFIX/opt/openssl@3/lib
-        $HOMEBREW_PREFIX/opt/openssl/lib
         $HOMEBREW_PREFIX/opt/pcre2/lib
-        $HOMEBREW_PREFIX/opt/srt/lib
         $HOMEBREW_PREFIX/opt/gettext/lib
         $HOMEBREW_PREFIX/opt/zlib/lib
         $HOMEBREW_PREFIX/opt/expat/lib
         $HOMEBREW_PREFIX/opt/brotli/lib
         $HOMEBREW_PREFIX/opt/bzip2/lib
         $HOMEBREW_PREFIX/opt/xz/lib
-        $HOMEBREW_PREFIX/opt/libcrypto/lib
         $HOMEBREW_PREFIX/lib
     "
 
@@ -376,6 +385,11 @@ collect_deps() {
         if [[ "$dep" == "/opt/homebrew/"* ]] || [[ "$dep" == "/usr/local/"* ]]; then
             local lib_name=$(basename "$dep")
 
+            # Skip libraries we don't need (network streaming, SSL, etc.)
+            if should_skip_lib "$lib_name"; then
+                continue
+            fi
+
             if grep -q "^$lib_name:" "$HOMEBREW_DEPS_FILE" 2>/dev/null; then
                 continue
             fi
@@ -566,12 +580,23 @@ verify_binary() {
     local bad_deps=$(get_deps "$binary" | grep -E "/opt/homebrew|/usr/local" || true)
 
     if [ -n "$bad_deps" ]; then
-        echo "   ❌ $name has unresolved dependencies:"
+        # Filter out skipped libraries
+        local real_bad_deps=""
         for dep in $bad_deps; do
-            echo "      - $dep"
+            local dep_name=$(basename "$dep")
+            if ! should_skip_lib "$dep_name"; then
+                real_bad_deps="$real_bad_deps $dep"
+            fi
         done
-        FAILED=$((FAILED + 1))
-        return 1
+
+        if [ -n "$real_bad_deps" ]; then
+            echo "   ❌ $name has unresolved dependencies:"
+            for dep in $real_bad_deps; do
+                echo "      - $dep"
+            done
+            FAILED=$((FAILED + 1))
+            return 1
+        fi
     fi
 
     echo "   ✅ $name"
