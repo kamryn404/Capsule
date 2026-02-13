@@ -197,19 +197,18 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Version: $VERSION"
 
-      - name: Rename artifacts to match version
+      - name: Rename artifacts
         run: |
-          VERSION="${{ steps.version.outputs.version }}"
           mkdir -p release_files
 
           # Rename macOS DMG
-          find artifacts -name "*.dmg" -type f -exec cp {} "release_files/Capsule-v${VERSION}-macos.dmg" \;
+          find artifacts -name "*.dmg" -type f -exec cp {} "release_files/Capsule.dmg" \;
 
           # Rename Windows EXE
-          find artifacts -name "*.exe" -type f -exec cp {} "release_files/Capsule-v${VERSION}-windows.exe" \;
+          find artifacts -name "*.exe" -type f -exec cp {} "release_files/Capsule.exe" \;
 
           # Rename Linux AppImage
-          find artifacts -name "*.AppImage" -type f -exec cp {} "release_files/Capsule-v${VERSION}-linux.AppImage" \;
+          find artifacts -name "*.AppImage" -type f -exec cp {} "release_files/Capsule.appimage" \;
 
 
 
