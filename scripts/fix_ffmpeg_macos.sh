@@ -12,7 +12,8 @@
 #
 # Compatible with bash 3.x (macOS default)
 
-set -e
+# Don't use set -e, we handle errors manually
+set +e
 
 echo "🔧 FFmpeg macOS Post-Build Fix"
 echo "==============================="
@@ -138,11 +139,7 @@ is_fat_binary() {
     local binary="$1"
     # "are:" appears in lipo output only for fat binaries (e.g., "are: x86_64 arm64")
     # Thin binaries show "is architecture:" instead
-    if lipo -info "$binary" 2>/dev/null | grep -q "are:"; then
-        return 0
-    else
-        return 1
-    fi
+    lipo -info "$binary" 2>/dev/null | grep -q "are:"
 }
 
 # Patch a thin (single-architecture) binary
@@ -216,23 +213,30 @@ patch_binary() {
 
     echo "   Patching: $binary_name"
 
+    if [ -z "$binary" ]; then
+        echo "      ❌ Empty binary path!"
+        return 0
+    fi
+
     if [ ! -f "$binary" ]; then
-        echo "      ❌ File does not exist!"
-        return 1
+        echo "      ❌ File does not exist: $binary"
+        return 0
     fi
 
     # Make fully writable and remove extended attributes
-    chmod 755 "$binary" 2>/dev/null || true
-    xattr -cr "$binary" 2>/dev/null || true
-    codesign --remove-signature "$binary" 2>/dev/null || true
+    chmod 755 "$binary" 2>/dev/null
+    xattr -cr "$binary" 2>/dev/null
+    codesign --remove-signature "$binary" 2>/dev/null
 
     # Check if it has Homebrew dependencies
     local has_homebrew_deps=0
     local deps=$(get_deps "$binary")
+
+    local homebrew_dep_list=""
     for dep in $deps; do
         if [[ "$dep" == "/opt/homebrew/"* ]] || [[ "$dep" == "/usr/local/"* ]]; then
             has_homebrew_deps=1
-            break
+            homebrew_dep_list="$homebrew_dep_list $dep"
         fi
     done
 
@@ -241,33 +245,37 @@ patch_binary() {
         return 0
     fi
 
+    echo "      Homebrew deps:$homebrew_dep_list"
+
     # Try direct patching first
     local direct_patch_failed=0
     for dep in $deps; do
         if [[ "$dep" == "/opt/homebrew/"* ]] || [[ "$dep" == "/usr/local/"* ]]; then
             local dep_name=$(basename "$dep")
             if [ -f "$FRAMEWORKS_DIR/$dep_name" ]; then
-                # Try patching and check if it fails
+                echo "      Patching: $dep_name"
                 local output
                 output=$(install_name_tool -change "$dep" "@rpath/$dep_name" "$binary" 2>&1)
                 local result=$?
                 if [ $result -ne 0 ]; then
-                    echo "      install_name_tool failed: $output"
+                    echo "      ⚠️  Direct patch failed: $output"
                     direct_patch_failed=1
                     break
                 fi
+            else
+                echo "      ⚠️  $dep_name not bundled"
             fi
         fi
     done
 
     # If direct patching failed, try alternative approaches
     if [ "$direct_patch_failed" -eq 1 ]; then
-        echo "      Direct patching failed, trying alternative approaches..."
+        echo "      Trying alternative approach..."
 
         # Check if it's a fat binary
         if is_fat_binary "$binary"; then
             # Fat binary: use extract/patch/recombine approach
-            echo "      Binary is fat, using extract/patch/recombine..."
+            echo "      Fat binary - extract/patch/recombine..."
 
             local archs=$(get_architectures "$binary")
             local thin_binaries=""
@@ -275,48 +283,46 @@ patch_binary() {
             mkdir -p "$work_dir"
 
             # Extract each architecture
+            local extract_ok=1
             for arch in $archs; do
-                echo "      Extracting $arch..."
                 local thin_path="$work_dir/$arch"
-                if ! lipo -thin "$arch" -output "$thin_path" "$binary" 2>/dev/null; then
-                    echo "      ❌ Failed to extract $arch"
-                    rm -rf "$work_dir"
-                    return 1
+                if lipo -thin "$arch" -output "$thin_path" "$binary" 2>/dev/null; then
+                    thin_binaries="$thin_binaries $thin_path"
+                else
+                    echo "      ⚠️  Failed to extract $arch"
+                    extract_ok=0
+                    break
                 fi
-                thin_binaries="$thin_binaries $thin_path"
             done
 
-            # Patch each thin binary
-            for thin in $thin_binaries; do
-                echo "      Patching $(basename "$thin")..."
-                patch_thin_binary "$thin"
-            done
+            if [ "$extract_ok" -eq 1 ]; then
+                # Patch each thin binary
+                for thin in $thin_binaries; do
+                    patch_thin_binary "$thin"
+                done
 
-            # Recombine into fat binary
-            echo "      Recombining architectures..."
-            local new_binary="$work_dir/combined"
-            if ! lipo -create $thin_binaries -output "$new_binary" 2>/dev/null; then
-                echo "      ❌ Failed to recombine architectures"
-                rm -rf "$work_dir"
-                return 1
+                # Recombine into fat binary
+                local new_binary="$work_dir/combined"
+                if lipo -create $thin_binaries -output "$new_binary" 2>/dev/null; then
+                    cp "$new_binary" "$binary"
+                    chmod 755 "$binary"
+                    echo "      ✓ Patched via extract/recombine"
+                else
+                    echo "      ⚠️  Failed to recombine"
+                fi
             fi
 
-            # Replace original with patched version
-            cp "$new_binary" "$binary"
-            chmod 755 "$binary"
             rm -rf "$work_dir"
-
-            echo "      ✓ Successfully patched via extract/recombine"
             return 0
         else
             # Thin binary: try patching a copy
-            echo "      Binary is thin, trying copy-patch approach..."
+            echo "      Thin binary - copy/patch approach..."
 
             local temp_binary="$TEMP_DIR/$(basename "$binary")_thin_$$"
-            cp -L "$binary" "$temp_binary"
-            chmod 755 "$temp_binary"
-            xattr -cr "$temp_binary" 2>/dev/null || true
-            codesign --remove-signature "$temp_binary" 2>/dev/null || true
+            cp -L "$binary" "$temp_binary" 2>/dev/null
+            chmod 755 "$temp_binary" 2>/dev/null
+            xattr -cr "$temp_binary" 2>/dev/null
+            codesign --remove-signature "$temp_binary" 2>/dev/null
 
             # Try patching the copy
             local thin_patch_ok=1
@@ -333,20 +339,20 @@ patch_binary() {
             done
 
             if [ "$thin_patch_ok" -eq 1 ]; then
-                cp "$temp_binary" "$binary"
-                chmod 755 "$binary"
-                rm -f "$temp_binary"
-                echo "      ✓ Successfully patched via copy approach"
-                return 0
+                cp "$temp_binary" "$binary" 2>/dev/null
+                chmod 755 "$binary" 2>/dev/null
+                echo "      ✓ Patched via copy approach"
+            else
+                echo "      ⚠️  Could not patch, skipping"
             fi
 
-            rm -f "$temp_binary"
-            echo "      ⚠️  Could not patch thin binary, skipping..."
+            rm -f "$temp_binary" 2>/dev/null
             return 0
         fi
+    else
+        echo "      ✓ Patched"
     fi
 
-    echo "      ✓ Direct patching succeeded"
     return 0
 }
 
@@ -452,19 +458,23 @@ echo "🔧 Pass 3: Patching binaries..."
 echo ""
 echo "   === Main Executable ==="
 for exe in "$APP_PATH/Contents/MacOS"/*; do
-    [ -f "$exe" ] && patch_binary "$exe"
+    if [ -f "$exe" ]; then
+        patch_binary "$exe" || echo "      (patch_binary returned non-zero, continuing...)"
+    fi
 done
 
 # Patch frameworks
 echo ""
 echo "   === Frameworks ==="
 for framework in "$FRAMEWORKS_DIR"/*.framework; do
-    [ -d "$framework" ] || continue
+    if [ ! -d "$framework" ]; then
+        continue
+    fi
     framework_name=$(basename "$framework" .framework)
 
     for binary in "$framework/Versions/A/$framework_name" "$framework/$framework_name"; do
         if [ -f "$binary" ]; then
-            patch_binary "$binary"
+            patch_binary "$binary" || echo "      (patch_binary returned non-zero, continuing...)"
             break
         fi
     done
@@ -474,8 +484,10 @@ done
 echo ""
 echo "   === Bundled Dylibs ==="
 for dylib in "$FRAMEWORKS_DIR"/*.dylib; do
-    [ -f "$dylib" ] || continue
-    patch_binary "$dylib"
+    if [ ! -f "$dylib" ]; then
+        continue
+    fi
+    patch_binary "$dylib" || echo "      (patch_binary returned non-zero, continuing...)"
 
     # Update the dylib's ID
     dylib_name=$(basename "$dylib")
@@ -543,3 +555,5 @@ fi
 
 echo "✅ SUCCESS: All $CHECKED binaries verified!"
 echo "   App bundle is ready for distribution."
+
+exit 0
