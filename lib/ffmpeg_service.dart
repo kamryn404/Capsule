@@ -364,6 +364,23 @@ class DesktopFfmpegService implements FfmpegService {
           return;
         }
       }
+
+      // On macOS, check common Homebrew paths if 'which' failed
+      // (Required because .app bundles don't inherit shell PATH)
+      if (Platform.isMacOS) {
+        final commonPaths = [
+          '/opt/homebrew/bin/ffmpeg',
+          '/usr/local/bin/ffmpeg',
+        ];
+        for (final path in commonPaths) {
+          if (await File(path).exists()) {
+            _binaryPath = path;
+            _isSystemFfmpeg = true;
+            logger.log('Found system FFmpeg at $path');
+            return;
+          }
+        }
+      }
     } catch (e) {
       logger.error('Error checking for system ffmpeg', e);
     }
@@ -600,6 +617,8 @@ class DesktopFfmpegService implements FfmpegService {
       await init();
     }
 
+    if (_binaryPath == null) return false;
+
     // Run ffmpeg -encoders
     final result = await Process.run(_binaryPath!, ['-encoders']);
     final output = result.stdout.toString();
@@ -614,6 +633,8 @@ class DesktopFfmpegService implements FfmpegService {
     if (_binaryPath == null) {
       await init();
     }
+
+    if (_binaryPath == null) return false;
 
     // Run ffmpeg -h encoder=name
     final result = await Process.run(_binaryPath!, [
@@ -638,6 +659,8 @@ class DesktopFfmpegService implements FfmpegService {
     if (_binaryPath == null) {
       await init();
     }
+
+    if (_binaryPath == null) return false;
 
     // Use ffprobe to get pixel format
     final ffprobePath = _binaryPath!.replaceAll('ffmpeg', 'ffprobe');
