@@ -353,7 +353,7 @@ class DesktopFfmpegService implements FfmpegService {
       logger.log('PATH: ${Platform.environment['PATH']}');
       final result = await Process.run(Platform.isWindows ? 'where' : 'which', [
         'ffmpeg',
-      ]);
+      ], runInShell: Platform.isWindows);
 
       if (result.exitCode == 0) {
         final systemPath = result.stdout.toString().trim().split('\n').first;
@@ -424,6 +424,7 @@ class DesktopFfmpegService implements FfmpegService {
       args,
       environment: environment,
       includeParentEnvironment: environment == null,
+      runInShell: Platform.isWindows,
     );
     bool isCancelled = false;
     final List<String> errorOutput = [];
@@ -620,7 +621,9 @@ class DesktopFfmpegService implements FfmpegService {
     if (_binaryPath == null) return false;
 
     // Run ffmpeg -encoders
-    final result = await Process.run(_binaryPath!, ['-encoders']);
+    final result = await Process.run(_binaryPath!, [
+      '-encoders',
+    ], runInShell: Platform.isWindows);
     final output = result.stdout.toString();
 
     debugPrint('Available encoders check for $encoderName');
@@ -640,7 +643,7 @@ class DesktopFfmpegService implements FfmpegService {
     final result = await Process.run(_binaryPath!, [
       '-h',
       'encoder=$encoderName',
-    ]);
+    ], runInShell: Platform.isWindows);
     final output = result.stdout.toString();
 
     // Look for "Supported pixel formats: ... pixelFormat ..."
@@ -674,7 +677,7 @@ class DesktopFfmpegService implements FfmpegService {
       '-of',
       'default=noprint_wrappers=1:nokey=1',
       path,
-    ]);
+    ], runInShell: Platform.isWindows);
 
     final pixFmt = result.stdout.toString().trim();
     if (pixFmt.isEmpty) return false;
