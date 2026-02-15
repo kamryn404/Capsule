@@ -9,6 +9,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:path/path.dart' as p;
+import 'package:ffmpeg_kit_flutter_new_full/ffmpeg_kit.dart';
 import 'package:window_manager/window_manager.dart';
 
 import 'ffmpeg_service.dart' as ffmpeg;

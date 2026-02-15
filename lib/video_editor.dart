@@ -146,13 +146,14 @@ class _VideoEditorState extends State<VideoEditor> {
 
       // Check for hardware acceleration and encoders
       try {
+        // 1. AV1: Prefer libsvtav1 (System) then libaom-av1 (FFmpegKit)
         _av1Encoder = await _findEncoder([
+          'libsvtav1',
           'av1_videotoolbox',
-          'av1_nvenc',
-          'av1_amf',
-          'av1_qsv',
-          'av1_vaapi',
+          'libaom-av1',
         ]);
+
+        // 2. H.265: Prefer Hardware (FFmpegKit) then libx265 (System)
         _h265Encoder = await _findEncoder([
           'hevc_videotoolbox',
           'hevc_mediacodec',
@@ -160,7 +161,10 @@ class _VideoEditorState extends State<VideoEditor> {
           'hevc_amf',
           'hevc_qsv',
           'hevc_vaapi',
+          'libx265',
         ]);
+
+        // 3. H.264: Prefer Hardware (FFmpegKit) then libx264 (System)
         _h264Encoder = await _findEncoder([
           'h264_videotoolbox',
           'h264_mediacodec',
@@ -168,18 +172,8 @@ class _VideoEditorState extends State<VideoEditor> {
           'h264_amf',
           'h264_qsv',
           'h264_vaapi',
+          'libx264',
         ]);
-
-        // Fallback to software if no hardware
-        final usingSystemFfmpeg = await _ffmpegService.isUsingSystemFfmpeg();
-        if (usingSystemFfmpeg) {
-          _h265Encoder ??= await _ffmpegService.hasEncoder('libx265')
-              ? 'libx265'
-              : null;
-        }
-        _h264Encoder ??= await _ffmpegService.hasEncoder('libx264')
-            ? 'libx264'
-            : null;
 
         _hasAv1Hardware =
             _av1Encoder != null && !_av1Encoder!.startsWith('lib');
@@ -189,6 +183,9 @@ class _VideoEditorState extends State<VideoEditor> {
         _hasH264 = _h264Encoder != null;
 
         // Set default format based on availability
+        if (_outputFormat == 'av1' && _av1Encoder == null) {
+          _outputFormat = 'h265';
+        }
         if (_outputFormat == 'h265' && _h265Encoder == null) {
           _outputFormat = 'h264';
         }
@@ -669,19 +666,18 @@ class _VideoEditorState extends State<VideoEditor> {
       String speed = '';
 
       if (_outputFormat == 'av1') {
-        if (_av1Encoder != null) {
-          codec = _av1Encoder!;
-        } else {
-          codec = 'libaom-av1';
-          speed =
-              '-cpu-used 6'; // Faster encoding (4-6 is good balance, 8 is fastest)
+        codec = _av1Encoder ?? 'libaom-av1';
+        if (codec == 'libsvtav1') {
+          speed = '-preset 10';
+        } else if (codec == 'libaom-av1') {
+          speed = '-cpu-used 6';
         }
       } else if (_outputFormat == 'vp9') {
         codec = 'libvpx-vp9';
         speed = '-cpu-used 6'; // Faster encoding
       } else if (_outputFormat == 'h265') {
         codec = _h265Encoder ?? 'libx265';
-        if (_hasH265Software) {
+        if (codec == 'libx265') {
           speed = '-preset fast';
         }
       } else {

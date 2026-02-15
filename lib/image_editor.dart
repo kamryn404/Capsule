@@ -55,7 +55,7 @@ class _ImageEditorState extends State<ImageEditor> {
     _currentTask?.cancel();
     super.dispose();
   }
-  
+
   @override
   void initState() {
     super.initState();
@@ -125,7 +125,9 @@ class _ImageEditorState extends State<ImageEditor> {
           child: Card(
             color: Colors.black.withValues(alpha: 0.9),
             elevation: 8,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
             child: Container(
               width: isNarrow ? double.infinity : 300,
               padding: const EdgeInsets.all(16.0),
@@ -139,15 +141,28 @@ class _ImageEditorState extends State<ImageEditor> {
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text('Original', style: TextStyle(fontSize: 12, color: Colors.grey)),
-                          Text(_originalSize ?? '-', style: const TextStyle(fontWeight: FontWeight.bold)),
+                          const Text(
+                            'Original',
+                            style: TextStyle(fontSize: 12, color: Colors.grey),
+                          ),
+                          Text(
+                            _originalSize ?? '-',
+                            style: const TextStyle(fontWeight: FontWeight.bold),
+                          ),
                         ],
                       ),
-                      const Icon(Icons.arrow_forward, size: 16, color: Colors.grey),
+                      const Icon(
+                        Icons.arrow_forward,
+                        size: 16,
+                        color: Colors.grey,
+                      ),
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
-                          const Text('Compressed', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                          const Text(
+                            'Compressed',
+                            style: TextStyle(fontSize: 12, color: Colors.grey),
+                          ),
                           if (_isCompressing && widget.batchProgress == null)
                             const SizedBox(
                               width: 16,
@@ -155,7 +170,12 @@ class _ImageEditorState extends State<ImageEditor> {
                               child: CircularProgressIndicator(strokeWidth: 2),
                             )
                           else
-                            Text(_compressedSize ?? '-', style: const TextStyle(fontWeight: FontWeight.bold)),
+                            Text(
+                              _compressedSize ?? '-',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
                         ],
                       ),
                     ],
@@ -176,8 +196,14 @@ class _ImageEditorState extends State<ImageEditor> {
                           items: const [
                             DropdownMenuItem(value: 'jpg', child: Text('JPEG')),
                             DropdownMenuItem(value: 'png', child: Text('PNG')),
-                            DropdownMenuItem(value: 'webp', child: Text('WEBP')),
-                            DropdownMenuItem(value: 'avif', child: Text('AVIF')),
+                            DropdownMenuItem(
+                              value: 'webp',
+                              child: Text('WEBP'),
+                            ),
+                            DropdownMenuItem(
+                              value: 'avif',
+                              child: Text('AVIF'),
+                            ),
                           ],
                           onChanged: (String? newValue) {
                             if (newValue != null) {
@@ -185,11 +211,13 @@ class _ImageEditorState extends State<ImageEditor> {
                                 _outputFormat = newValue;
                               });
                               if (widget.onSettingsChanged != null) {
-                                widget.onSettingsChanged!(ImageSettings(
-                                  outputFormat: _outputFormat,
-                                  quality: _quality,
-                                  resolution: _resolution,
-                                ));
+                                widget.onSettingsChanged!(
+                                  ImageSettings(
+                                    outputFormat: _outputFormat,
+                                    quality: _quality,
+                                    resolution: _resolution,
+                                  ),
+                                );
                               }
                               _compressImage();
                             }
@@ -213,11 +241,17 @@ class _ImageEditorState extends State<ImageEditor> {
                             isDense: true,
                             underline: Container(),
                             selectedItemBuilder: (BuildContext context) {
-                              return [1.0, 0.5, 0.25].map<Widget>((double value) {
+                              return [1.0, 0.5, 0.25].map<Widget>((
+                                double value,
+                              ) {
                                 return Center(
                                   child: Text(
-                                    value == 1.0 ? '100%' : (value == 0.5 ? '50%' : '25%'),
-                                    style: const TextStyle(fontWeight: FontWeight.bold),
+                                    value == 1.0
+                                        ? '100%'
+                                        : (value == 0.5 ? '50%' : '25%'),
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                    ),
                                   ),
                                 );
                               }).toList();
@@ -225,15 +259,30 @@ class _ImageEditorState extends State<ImageEditor> {
                             items: [
                               DropdownMenuItem(
                                 value: 1.0,
-                                child: _buildResolutionItem('100%', _originalResolution!),
+                                child: _buildResolutionItem(
+                                  '100%',
+                                  _originalResolution!,
+                                ),
                               ),
                               DropdownMenuItem(
                                 value: 0.5,
-                                child: _buildResolutionItem('50%', Size(_originalResolution!.width * 0.5, _originalResolution!.height * 0.5)),
+                                child: _buildResolutionItem(
+                                  '50%',
+                                  Size(
+                                    _originalResolution!.width * 0.5,
+                                    _originalResolution!.height * 0.5,
+                                  ),
+                                ),
                               ),
                               DropdownMenuItem(
                                 value: 0.25,
-                                child: _buildResolutionItem('25%', Size(_originalResolution!.width * 0.25, _originalResolution!.height * 0.25)),
+                                child: _buildResolutionItem(
+                                  '25%',
+                                  Size(
+                                    _originalResolution!.width * 0.25,
+                                    _originalResolution!.height * 0.25,
+                                  ),
+                                ),
                               ),
                             ],
                             onChanged: (double? newValue) {
@@ -242,11 +291,13 @@ class _ImageEditorState extends State<ImageEditor> {
                                   _resolution = newValue;
                                 });
                                 if (widget.onSettingsChanged != null) {
-                                  widget.onSettingsChanged!(ImageSettings(
-                                    outputFormat: _outputFormat,
-                                    quality: _quality,
-                                    resolution: _resolution,
-                                  ));
+                                  widget.onSettingsChanged!(
+                                    ImageSettings(
+                                      outputFormat: _outputFormat,
+                                      quality: _quality,
+                                      resolution: _resolution,
+                                    ),
+                                  );
                                 }
                                 _compressImage();
                               }
@@ -279,11 +330,13 @@ class _ImageEditorState extends State<ImageEditor> {
                               },
                               onChangeEnd: (double value) {
                                 if (widget.onSettingsChanged != null) {
-                                  widget.onSettingsChanged!(ImageSettings(
-                                    outputFormat: _outputFormat,
-                                    quality: _quality,
-                                    resolution: _resolution,
-                                  ));
+                                  widget.onSettingsChanged!(
+                                    ImageSettings(
+                                      outputFormat: _outputFormat,
+                                      quality: _quality,
+                                      resolution: _resolution,
+                                    ),
+                                  );
                                 }
                                 _compressImage();
                               },
@@ -308,11 +361,24 @@ class _ImageEditorState extends State<ImageEditor> {
                       const SizedBox(width: 16),
                       Expanded(
                         child: FilledButton.icon(
-                          onPressed: _compressedFile != null && widget.batchProgress == null ? (widget.onSaveBatch ?? _saveImage) : null,
+                          onPressed:
+                              _compressedFile != null &&
+                                  widget.batchProgress == null
+                              ? (widget.onSaveBatch ?? _saveImage)
+                              : null,
                           icon: widget.batchProgress != null
-                              ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
                               : const Icon(Icons.save),
-                          label: Text(widget.batchProgress != null ? 'Saving...' : 'Save'),
+                          label: Text(
+                            widget.batchProgress != null ? 'Saving...' : 'Save',
+                          ),
                         ),
                       ),
                     ],
@@ -324,7 +390,10 @@ class _ImageEditorState extends State<ImageEditor> {
                         children: [
                           LinearProgressIndicator(value: widget.batchProgress),
                           const SizedBox(height: 4),
-                          Text(widget.progressLabel ?? '${(widget.batchProgress! * 100).round()}%'),
+                          Text(
+                            widget.progressLabel ??
+                                '${(widget.batchProgress! * 100).round()}%',
+                          ),
                         ],
                       ),
                     ),
@@ -359,7 +428,9 @@ class _ImageEditorState extends State<ImageEditor> {
 
         // Convert to PNG
         // Use rgba to ensure transparency is preserved if source has it
-        final task = await _ffmpegService.execute('-y -i "${widget.file.path}" -pix_fmt rgba -frames:v 1 -update 1 "$previewPath"');
+        final task = await _ffmpegService.execute(
+          '-y -i "${widget.file.path}" -pix_fmt rgba -frames:v 1 -update 1 "$previewPath"',
+        );
         await task.done;
 
         if (myJobId != _previewJobId) return;
@@ -390,12 +461,17 @@ class _ImageEditorState extends State<ImageEditor> {
 
   Future<void> _updateOriginalSize() async {
     final size = await widget.file.length();
-    
+
     // Get image dimensions
     Size? resolution;
     try {
-      final decodedImage = await decodeImageFromList(await File(widget.file.path).readAsBytes());
-      resolution = Size(decodedImage.width.toDouble(), decodedImage.height.toDouble());
+      final decodedImage = await decodeImageFromList(
+        await File(widget.file.path).readAsBytes(),
+      );
+      resolution = Size(
+        decodedImage.width.toDouble(),
+        decodedImage.height.toDouble(),
+      );
     } catch (e) {
       debugPrint('Error getting image dimensions: $e');
     }
@@ -452,43 +528,120 @@ class _ImageEditorState extends State<ImageEditor> {
       String scaleFilter = '';
       if (_resolution < 1.0) {
         // Scale width and height, ensuring even dimensions
-        scaleFilter = '-vf scale=trunc(iw*$_resolution/2)*2:trunc(ih*$_resolution/2)*2';
+        scaleFilter =
+            '-vf scale=trunc(iw*$_resolution/2)*2:trunc(ih*$_resolution/2)*2';
       }
 
       if (_outputFormat == 'png') {
         // PNG (lossless, compression level 0-9, default is usually 6 or 7)
-        command = '-y -i "${widget.file.path}" $scaleFilter -frames:v 1 -update 1 "$outputPath"';
+        command =
+            '-y -i "${widget.file.path}" $scaleFilter -frames:v 1 -update 1 "$outputPath"';
       } else if (_outputFormat == 'webp') {
         // WEBP (0-100 quality)
         // Use yuva420p for transparency support
-        command = '-y -i "${widget.file.path}" $scaleFilter -q:v ${_quality.round()} -pix_fmt yuva420p -frames:v 1 -update 1 "$outputPath"';
+        command =
+            '-y -i "${widget.file.path}" $scaleFilter -c:v libwebp -q:v ${_quality.round()} -pix_fmt yuva420p -frames:v 1 -update 1 "$outputPath"';
       } else if (_outputFormat == 'avif') {
         // AVIF
         int crf = (63 - ((_quality - 1) * (63 / 99))).round();
         crf = crf.clamp(0, 63);
-        
-        // Check if yuva420p is supported by the encoder
-        bool supportsYuva420p = await _ffmpegService.hasPixelFormat('libaom-av1', 'yuva420p');
-        
-        if (supportsYuva420p) {
-          // Use native transparency support
-          command = '-y -i "${widget.file.path}" $scaleFilter -c:v libaom-av1 -crf $crf -cpu-used 6 -pix_fmt yuva420p -frames:v 1 -update 1 "$outputPath"';
-        } else {
-          // Use dual-stream encoding for transparency support
-          String filterComplex;
-          if (scaleFilter.isNotEmpty) {
-            // Extract scale parameters from "-vf scale=..."
-            final scaleParams = scaleFilter.replaceAll('-vf ', '');
-            filterComplex = '[0:v]$scaleParams[scaled];[scaled]format=rgba[in];[in]split=2[color_in][alpha_in];[color_in]format=yuv420p[color];[alpha_in]alphaextract,format=gray,setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709[alpha]';
+
+        bool hasAom = await _ffmpegService.hasEncoder('libaom-av1');
+        bool hasSvt = await _ffmpegService.hasEncoder('libsvtav1');
+        bool sourceHasAlpha = await _ffmpegService.hasAlphaChannel(
+          widget.file.path,
+        );
+
+        // Pick the encoder to use - prefer libaom-av1 for better AVIF compatibility
+        String encoder = hasAom ? 'libaom-av1' : (hasSvt ? 'libsvtav1' : '');
+
+        if (encoder.isEmpty) {
+          debugPrint('No AV1 encoder available for AVIF');
+          command =
+              '-y -i "${widget.file.path}" $scaleFilter -frames:v 1 -update 1 "$outputPath"';
+        } else if (sourceHasAlpha) {
+          // Source has alpha - check for native alpha support
+          bool supportsAlpha = await _ffmpegService.hasPixelFormat(
+            encoder,
+            'yuva420p',
+          );
+
+          if (supportsAlpha) {
+            // Use native alpha support
+            String speed = (encoder == 'libsvtav1')
+                ? '-preset 10'
+                : '-cpu-used 6';
+            String filter;
+            if (scaleFilter.isNotEmpty) {
+              String s = scaleFilter.replaceAll('-vf ', '');
+              filter =
+                  '$s,scale=in_range=full:out_range=full:out_color_matrix=bt709,format=yuva420p';
+            } else {
+              filter =
+                  'scale=in_range=full:out_range=full:out_color_matrix=bt709,format=yuva420p';
+            }
+            command =
+                '-y -i "${widget.file.path}" -vf "$filter" -c:v $encoder -crf $crf $speed '
+                '-color_range full -colorspace bt709 -color_primaries bt709 -color_trc bt709 '
+                '-still-picture 1 "$outputPath"';
           } else {
-            filterComplex = '[0:v]format=rgba[in];[in]split=2[color_in][alpha_in];[color_in]format=yuv420p[color];[alpha_in]alphaextract,format=gray,setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709[alpha]';
+            // Use two-stream mapping for transparency.
+            // We split the input into color and alpha streams, then map them to the AVIF muxer.
+            // We force the alpha stream to 'gray' to ensure it has exactly one plane.
+            String filter;
+            if (scaleFilter.isNotEmpty) {
+              String s = scaleFilter.replaceAll('-vf ', '');
+              filter =
+                  '[0:v]$s,format=rgba,split[c][a];[c]scale=in_range=full:out_range=full:out_color_matrix=bt709,format=yuv420p[co];[a]alphaextract,scale=in_range=full:out_range=full,format=gray[ao]';
+            } else {
+              filter =
+                  '[0:v]format=rgba,split[c][a];[c]scale=in_range=full:out_range=full:out_color_matrix=bt709,format=yuv420p[co];[a]alphaextract,scale=in_range=full:out_range=full,format=gray[ao]';
+            }
+
+            String speed = (encoder == 'libsvtav1')
+                ? '-preset 10'
+                : '-cpu-used 6';
+
+            // Map both streams. Stream 0 is color, Stream 1 is alpha.
+            // We add explicit color space metadata to prevent color distortion.
+            command =
+                '-y -i "${widget.file.path}" -filter_complex "$filter" '
+                '-map "[co]" -c:v:0 $encoder $speed '
+                '-color_range:v:0 full -colorspace:v:0 bt709 -color_primaries:v:0 bt709 -color_trc:v:0 bt709 '
+                '-map "[ao]" -c:v:1 $encoder $speed '
+                '-color_range:v:1 full '
+                '-crf $crf -still-picture 1 "$outputPath"';
           }
-          
-          command = '-y -i "${widget.file.path}" -filter_complex "$filterComplex" -map "[color]" -map "[alpha]" -c:v libaom-av1 -crf $crf -cpu-used 6 -frames:v 1 -update 1 "$outputPath"';
+        } else if (hasAom || hasSvt) {
+          // No alpha channel - simple single-stream encode.
+          // We add explicit color space metadata to prevent "magenta/green" color distortion.
+          String speed = (encoder == 'libsvtav1')
+              ? '-preset 10'
+              : '-cpu-used 6';
+          // For non-alpha images, we also use a filter to ensure the color conversion is high quality and full range.
+          String filter;
+          if (scaleFilter.isNotEmpty) {
+            String s = scaleFilter.replaceAll('-vf ', '');
+            filter =
+                '$s,scale=in_range=full:out_range=full:out_color_matrix=bt709,format=yuv420p';
+          } else {
+            filter =
+                'scale=in_range=full:out_range=full:out_color_matrix=bt709,format=yuv420p';
+          }
+
+          command =
+              '-y -i "${widget.file.path}" -vf "$filter" -c:v $encoder -crf $crf $speed '
+              '-color_range full -colorspace bt709 -color_primaries bt709 -color_trc bt709 '
+              '-still-picture 1 "$outputPath"';
+        } else {
+          // No AV1 encoder available at all - fallback
+          command =
+              '-y -i "${widget.file.path}" $scaleFilter -frames:v 1 -update 1 "$outputPath"';
         }
       } else {
         // JPEG
-        command = '-y -i "${widget.file.path}" $scaleFilter -q:v $qValue -pix_fmt yuvj420p -frames:v 1 -update 1 "$outputPath"';
+        command =
+            '-y -i "${widget.file.path}" $scaleFilter -q:v $qValue -pix_fmt yuvj420p -frames:v 1 -update 1 "$outputPath"';
       }
 
       final task = await _ffmpegService.execute(command);
@@ -525,7 +678,9 @@ class _ImageEditorState extends State<ImageEditor> {
         debugPrint('Compression failed: Output file not created');
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Compression failed: Output file not created')),
+            const SnackBar(
+              content: Text('Compression failed: Output file not created'),
+            ),
           );
         }
       }
@@ -537,9 +692,9 @@ class _ImageEditorState extends State<ImageEditor> {
       debugPrint('Error compressing: $e');
       debugPrint('Stack trace: $stackTrace');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error compressing: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error compressing: $e')));
       }
     } finally {
       if (mounted) {
@@ -559,12 +714,12 @@ class _ImageEditorState extends State<ImageEditor> {
         if (Platform.isAndroid) {
           // Gal handles permissions, but good to be explicit if needed
         }
-        
+
         await Gal.putImage(_compressedFile!.path);
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Saved to Gallery')),
-          );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('Saved to Gallery')));
         }
       } catch (e) {
         if (mounted) {
@@ -578,10 +733,7 @@ class _ImageEditorState extends State<ImageEditor> {
       final FileSaveLocation? result = await getSaveLocation(
         suggestedName: '$inputBasename.$_outputFormat',
         acceptedTypeGroups: [
-          XTypeGroup(
-            label: 'Images',
-            extensions: [_outputFormat],
-          ),
+          XTypeGroup(label: 'Images', extensions: [_outputFormat]),
         ],
       );
       final String? fileName = result?.path;
@@ -594,15 +746,15 @@ class _ImageEditorState extends State<ImageEditor> {
       try {
         await _compressedFile!.copy(fileName);
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Saved to $fileName')),
-          );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('Saved to $fileName')));
         }
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error saving file: $e')),
-          );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('Error saving file: $e')));
         }
       }
     }

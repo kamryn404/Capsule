@@ -15,12 +15,14 @@ class MediaInfo {
 
   final int width;
   final int height;
+  final bool hasAlpha;
 
   MediaInfo({
     required this.duration,
     required this.bitrate,
     this.width = 0,
     this.height = 0,
+    this.hasAlpha = false,
   });
 }
 
@@ -48,6 +50,7 @@ abstract class FfmpegService {
   Future<ProbeResult> probeFile(String path);
   Future<bool> hasEncoder(String encoderName);
   Future<bool> hasPixelFormat(String encoderName, String pixelFormat);
+  Future<bool> hasAlphaChannel(String path);
   Future<bool> isUsingSystemFfmpeg();
   Future<bool> isAvailable();
   Future<void> init();
@@ -273,8 +276,50 @@ class MobileFfmpegService implements FfmpegService {
 
   @override
   Future<bool> hasPixelFormat(String encoderName, String pixelFormat) async {
-    // Assume standard formats are supported on mobile
-    if (pixelFormat == 'yuva420p') return true;
+    final completer = Completer<bool>();
+    await FFmpegKit.executeAsync('-h encoder=$encoderName', (session) async {
+      final output = await session.getAllLogsAsString();
+      if (output == null) {
+        completer.complete(false);
+        return;
+      }
+      // Look for "Supported pixel formats: ... pixelFormat ..."
+      final regex = RegExp(r'Supported pixel formats:.*');
+      final match = regex.firstMatch(output);
+      if (match != null) {
+        final supported = match.group(0)!;
+        completer.complete(supported.contains(pixelFormat));
+      } else {
+        completer.complete(false);
+      }
+    });
+    return completer.future;
+  }
+
+  @override
+  Future<bool> hasAlphaChannel(String path) async {
+    final session = await FFprobeKit.getMediaInformation(path);
+    final info = session.getMediaInformation();
+
+    if (info == null) return false;
+
+    final streams = info.getStreams();
+    for (final stream in streams) {
+      if (stream.getType() == 'video') {
+        final pixFmt = stream.getProperty('pix_fmt');
+        if (pixFmt != null) {
+          // Pixel formats with alpha typically contain 'a' like rgba, yuva420p, etc.
+          return pixFmt.contains('rgba') ||
+              pixFmt.contains('yuva') ||
+              pixFmt.contains('gbrap') ||
+              pixFmt.contains('argb') ||
+              pixFmt.contains('abgr') ||
+              pixFmt.contains('bgra') ||
+              pixFmt.contains('ya') ||
+              pixFmt.contains('pal8'); // palette can have alpha
+        }
+      }
+    }
     return false;
   }
 }
@@ -588,6 +633,40 @@ class DesktopFfmpegService implements FfmpegService {
     return false;
   }
 
+  @override
+  Future<bool> hasAlphaChannel(String path) async {
+    if (_binaryPath == null) {
+      await init();
+    }
+
+    // Use ffprobe to get pixel format
+    final ffprobePath = _binaryPath!.replaceAll('ffmpeg', 'ffprobe');
+    final result = await Process.run(ffprobePath, [
+      '-v',
+      'error',
+      '-select_streams',
+      'v:0',
+      '-show_entries',
+      'stream=pix_fmt',
+      '-of',
+      'default=noprint_wrappers=1:nokey=1',
+      path,
+    ]);
+
+    final pixFmt = result.stdout.toString().trim();
+    if (pixFmt.isEmpty) return false;
+
+    // Pixel formats with alpha typically contain these patterns
+    return pixFmt.contains('rgba') ||
+        pixFmt.contains('yuva') ||
+        pixFmt.contains('gbrap') ||
+        pixFmt.contains('argb') ||
+        pixFmt.contains('abgr') ||
+        pixFmt.contains('bgra') ||
+        pixFmt.contains('ya') ||
+        pixFmt.contains('pal8'); // palette can have alpha
+  }
+
   void _parseProgress(
     String data,
     Duration totalDuration,
@@ -632,28 +711,22 @@ class DesktopFfmpegService implements FfmpegService {
 class MacosHybridFfmpegService implements FfmpegService {
   final _desktopService = DesktopFfmpegService();
   final _mobileService = MobileFfmpegService();
-  FfmpegService? _activeService;
+  bool _initialized = false;
 
   @override
   Future<void> init() async {
+    if (_initialized) return;
+    // Initialize both services
     await _desktopService.init();
-    if (await _desktopService.isAvailable()) {
-      logger.log('MacosHybridFfmpegService: Using DesktopFfmpegService');
-      _activeService = _desktopService;
-    } else {
-      logger.log(
-        'MacosHybridFfmpegService: Using MobileFfmpegService (FFmpegKit)',
-      );
-      _activeService = _mobileService;
-      await _mobileService.init();
-    }
+    await _mobileService.init();
+    _initialized = true;
+    logger.log('MacosHybridFfmpegService: Both services initialized');
   }
 
-  Future<FfmpegService> _getService() async {
-    if (_activeService == null) {
+  Future<void> _ensureInitialized() async {
+    if (!_initialized) {
       await init();
     }
-    return _activeService!;
   }
 
   @override
@@ -662,7 +735,10 @@ class MacosHybridFfmpegService implements FfmpegService {
     void Function(double progress)? onProgress,
     Duration? totalDuration,
   }) async {
-    final service = await _getService();
+    await _ensureInitialized();
+    // Determine which service is best for this specific command
+    FfmpegService service = await _selectServiceForCommand(command);
+
     return service.execute(
       command,
       onProgress: onProgress,
@@ -670,39 +746,80 @@ class MacosHybridFfmpegService implements FfmpegService {
     );
   }
 
+  Future<FfmpegService> _selectServiceForCommand(String command) async {
+    // 1. Prefer System FFmpeg for libsvtav1
+    if (command.contains('libsvtav1')) {
+      if (await _desktopService.hasEncoder('libsvtav1')) {
+        logger.log('Routing to System FFmpeg for libsvtav1');
+        return _desktopService;
+      }
+    }
+
+    // 2. Prefer System FFmpeg for libx264/libx265 (Software)
+    if (command.contains('libx264') || command.contains('libx265')) {
+      if (await _desktopService.hasEncoder('libx264') ||
+          await _desktopService.hasEncoder('libx265')) {
+        logger.log('Routing to System FFmpeg for software x264/x265');
+        return _desktopService;
+      }
+    }
+
+    // 3. Default to Mobile (FFmpegKit) for everything else
+    // This includes hardware encoders (videotoolbox) and libaom-av1/libwebp
+    logger.log('Routing to FFmpegKit (Default)');
+    return _mobileService;
+  }
+
   @override
   Future<MediaInfo> getMediaInfo(String path) async {
-    final service = await _getService();
-    return service.getMediaInfo(path);
+    await _ensureInitialized();
+    // Use mobile by default for info as it's faster to spin up
+    return _mobileService.getMediaInfo(path);
   }
 
   @override
   Future<ProbeResult> probeFile(String path) async {
-    final service = await _getService();
-    return service.probeFile(path);
+    await _ensureInitialized();
+    return _mobileService.probeFile(path);
   }
 
   @override
   Future<bool> hasEncoder(String encoderName) async {
-    final service = await _getService();
-    return service.hasEncoder(encoderName);
+    await _ensureInitialized();
+    // Check both services. If either has it, we can use it.
+    bool inMobile = await _mobileService.hasEncoder(encoderName);
+    if (inMobile) return true;
+
+    return await _desktopService.hasEncoder(encoderName);
   }
 
   @override
   Future<bool> hasPixelFormat(String encoderName, String pixelFormat) async {
-    final service = await _getService();
-    return service.hasPixelFormat(encoderName, pixelFormat);
+    await _ensureInitialized();
+    // Check mobile first, then desktop
+    if (await _mobileService.hasEncoder(encoderName)) {
+      return await _mobileService.hasPixelFormat(encoderName, pixelFormat);
+    }
+    return await _desktopService.hasPixelFormat(encoderName, pixelFormat);
   }
 
   @override
   Future<bool> isUsingSystemFfmpeg() async {
-    final service = await _getService();
-    return service.isUsingSystemFfmpeg();
+    await _ensureInitialized();
+    // This is now dynamic, but we'll return true if system is at least available
+    return _desktopService.isAvailable();
   }
 
   @override
   Future<bool> isAvailable() async {
-    final service = await _getService();
-    return service.isAvailable();
+    await _ensureInitialized();
+    return true; // One of them will always be available
+  }
+
+  @override
+  Future<bool> hasAlphaChannel(String path) async {
+    await _ensureInitialized();
+    // Use mobile service for probing as it's typically faster
+    return _mobileService.hasAlphaChannel(path);
   }
 }
